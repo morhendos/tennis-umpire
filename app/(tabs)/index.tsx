@@ -22,111 +22,9 @@ import { useRouter } from 'expo-router';
 import { useMatch } from '@/lib/useMatch';
 import { getMatchStatus, getSetsWon, MatchFormatType, FORMAT_NAMES } from '@/lib/scoring';
 import { COLORS } from '@/constants/colors';
+import { AnimatedScore, ServeIndicator, IconButton } from '@/components/ui';
 
 const { width, height } = Dimensions.get('window');
-
-// Animated Score Component
-const AnimatedScore = ({ value, color, size = 48 }: { value: string | number, color: string, size?: number }) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const prevValue = useRef(value);
-
-  useEffect(() => {
-    if (prevValue.current !== value) {
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 1.2,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 4,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      prevValue.current = value;
-    }
-  }, [value]);
-
-  return (
-    <Animated.Text
-      style={[
-        styles.animatedScore,
-        {
-          color,
-          fontSize: size,
-          transform: [{ scale: scaleAnim }],
-        },
-      ]}
-    >
-      {value}
-    </Animated.Text>
-  );
-};
-
-// Pulsing Serve Indicator
-const ServeIndicator = () => {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.3,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, []);
-
-  return (
-    <View style={styles.serveContainer}>
-      <Animated.View
-        style={[
-          styles.servePulse,
-          { transform: [{ scale: pulseAnim }], opacity: pulseAnim.interpolate({
-            inputRange: [1, 1.3],
-            outputRange: [0.6, 0],
-          }) },
-        ]}
-      />
-      <View style={styles.serveDot} />
-    </View>
-  );
-};
-
-// Elegant Icon Button Component
-const IconButton = ({ 
-  icon, 
-  iconFamily = 'ionicons',
-  onPress, 
-  size = 22,
-  disabled = false,
-}: { 
-  icon: string, 
-  iconFamily?: 'ionicons' | 'feather',
-  onPress: () => void, 
-  size?: number,
-  disabled?: boolean,
-}) => {
-  const IconComponent = iconFamily === 'feather' ? Feather : Ionicons;
-  
-  return (
-    <TouchableOpacity onPress={onPress} disabled={disabled} activeOpacity={0.7}>
-      <BlurView intensity={30} tint="dark" style={[styles.iconBtn, disabled && styles.iconBtnDisabled]}>
-        <IconComponent name={icon as any} size={size} color={disabled ? COLORS.muted : COLORS.silver} />
-      </BlurView>
-    </TouchableOpacity>
-  );
-};
 
 // Coin Flip Component
 const CoinFlip = ({ 
@@ -470,45 +368,6 @@ const CoinFlip = ({
           <Text style={styles.backButtonText}>BACK TO COIN TOSS</Text>
         </TouchableOpacity>
       )}
-    </View>
-  );
-};
-
-// Compact Serve Indicator for landscape
-const ServeIndicatorCompact = () => {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.3,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, []);
-
-  return (
-    <View style={styles.serveCompact}>
-      <Animated.View
-        style={[
-          styles.servePulseCompact,
-          { transform: [{ scale: pulseAnim }], opacity: pulseAnim.interpolate({
-            inputRange: [1, 1.3],
-            outputRange: [0.6, 0],
-          }) },
-        ]}
-      />
-      <View style={styles.serveDotCompact} />
     </View>
   );
 };
@@ -938,7 +797,7 @@ export default function ScoreboardScreen() {
                 <View style={styles.lsbPlayerRow}>
                   <View style={styles.lsbNameCol}>
                     <View style={styles.lsbPlayerInfo}>
-                      {match.server === 'A' && <ServeIndicatorCompact />}
+                      {match.server === 'A' && <ServeIndicator compact />}
                       <Text style={[styles.lsbPlayerName, match.server !== 'A' && { marginLeft: 18 }]} numberOfLines={1}>
                         {match.players.A.name}
                       </Text>
@@ -989,7 +848,7 @@ export default function ScoreboardScreen() {
                 <View style={styles.lsbPlayerRow}>
                   <View style={styles.lsbNameCol}>
                     <View style={styles.lsbPlayerInfo}>
-                      {match.server === 'B' && <ServeIndicatorCompact />}
+                      {match.server === 'B' && <ServeIndicator compact />}
                       <Text style={[styles.lsbPlayerName, match.server !== 'B' && { marginLeft: 18 }]} numberOfLines={1}>
                         {match.players.B.name}
                       </Text>
@@ -1354,20 +1213,6 @@ const styles = StyleSheet.create({
     width: 48,
   },
 
-  // Icon button
-  iconBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: COLORS.muted + '30',
-  },
-  iconBtnDisabled: {
-    opacity: 0.4,
-  },
 
   // Setup Screen
   setupContent: {
@@ -1905,32 +1750,7 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
 
-  // Animated score
-  animatedScore: {
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
 
-  // Serve indicator
-  serveContainer: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  servePulse: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: COLORS.gold,
-  },
-  serveDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.gold,
-  },
 
   // Set history
   setHistoryRow: {
@@ -2243,27 +2063,6 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
 
-  // Compact serve indicator for landscape
-  serveCompact: {
-    width: 16,
-    height: 16,
-    marginRight: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  servePulseCompact: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: COLORS.gold,
-  },
-  serveDotCompact: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.gold,
-  },
 
   // Setup scroll content
   setupScrollContent: {

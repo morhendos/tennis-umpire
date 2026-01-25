@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Dimensions,
   Animated,
   Image,
   useWindowDimensions,
@@ -22,8 +21,7 @@ import { getMatchStatus, getSetsWon, MatchFormatType, FORMAT_NAMES } from '@/lib
 import { COLORS } from '@/constants/colors';
 import { AnimatedScore, ServeIndicator, IconButton } from '@/components/ui';
 import { CoinFlip } from '@/components/CoinFlip';
-
-const { width, height } = Dimensions.get('window');
+import { getStatusConfig, FORMAT_OPTIONS } from '@/lib/matchUtils';
 
 export default function ScoreboardScreen() {
   const insets = useSafeAreaInsets();
@@ -37,9 +35,6 @@ export default function ScoreboardScreen() {
   const [setupStep, setSetupStep] = useState<'players' | 'format'>('players');
   const [showCoinFlip, setShowCoinFlip] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  // Format options for the selector (ordered by match length)
-  const formatOptions: MatchFormatType[] = ['one_set', 'best_of_3_super', 'best_of_3', 'best_of_5'];
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -285,7 +280,7 @@ export default function ScoreboardScreen() {
 
             {/* Format Options - Vertical List */}
             <View style={styles.formatList}>
-              {formatOptions.map((format) => (
+              {FORMAT_OPTIONS.map((format) => (
                 <TouchableOpacity
                   key={format}
                   style={[
@@ -343,33 +338,7 @@ export default function ScoreboardScreen() {
   // Match Screen
   const status = getMatchStatus(match);
   const setsWon = getSetsWon(match);
-
-  const getStatusConfig = () => {
-    switch (status) {
-      case 'deuce':
-        return { text: 'DEUCE', color: COLORS.gold, urgent: false };
-      case 'advantage_A':
-        return { text: `AD ${match.players.A.name}`, color: COLORS.greenAccent, urgent: false };
-      case 'advantage_B':
-        return { text: `AD ${match.players.B.name}`, color: COLORS.gold, urgent: false };
-      case 'set_point_A':
-      case 'set_point_B':
-        return { text: 'SET POINT', color: COLORS.amber, urgent: true };
-      case 'match_point_A':
-      case 'match_point_B':
-        return { text: 'MATCH POINT', color: COLORS.red, urgent: true };
-      case 'match_complete':
-        return { text: 'FINAL', color: COLORS.gold, urgent: false };
-      default:
-        return match.tiebreak ? { text: 'TIEBREAK', color: COLORS.gold, urgent: false } : null;
-    }
-  };
-
-  const statusConfig = getStatusConfig();
-
-  // Build set scores string for landscape (e.g., "6-4, 7-5")
-  const completedSetScores = match.sets.slice(0, -1).map((set, i) => `${set.A}-${set.B}`).join(', ');
-  const currentSetGames = `${match.games.A}-${match.games.B}`;
+  const statusConfig = getStatusConfig(status, match.players.A.name, match.players.B.name, match.tiebreak);
 
   // LANDSCAPE LAYOUT - TV-style horizontal scoreboard
   if (isLandscape) {

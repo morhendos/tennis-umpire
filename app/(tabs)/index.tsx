@@ -21,39 +21,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useMatch } from '@/lib/useMatch';
 import { getMatchStatus, getSetsWon, MatchFormatType, FORMAT_NAMES } from '@/lib/scoring';
+import { COLORS } from '@/constants/colors';
 
 const { width, height } = Dimensions.get('window');
-
-// Premium Wimbledon-inspired palette
-const COLORS = {
-  // Deep backgrounds
-  bgPrimary: '#050a08',
-  bgSecondary: '#0a1210',
-  bgCard: '#0d1a15',
-  
-  // Wimbledon green
-  green: '#1a472a',
-  greenLight: '#2d6a4f',
-  greenAccent: '#40916c',
-  
-  // Championship gold
-  gold: '#c9a227',
-  goldLight: '#d4b742',
-  goldMuted: '#8b7355',
-  
-  // Text
-  white: '#ffffff',
-  cream: '#f5f5dc',
-  silver: '#c0c0c0',
-  muted: '#5a6b62',
-  
-  // Scores
-  scoreGlow: '#40916c',
-  
-  // Accents
-  red: '#dc2626',
-  amber: '#f59e0b',
-};
 
 // Animated Score Component
 const AnimatedScore = ({ value, color, size = 48 }: { value: string | number, color: string, size?: number }) => {

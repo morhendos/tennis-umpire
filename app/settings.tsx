@@ -23,21 +23,7 @@ import {
   VoiceEngine 
 } from '@/lib/voiceStore';
 import { speak, getAvailableVoices } from '@/lib/speech';
-
-const COLORS = {
-  bgPrimary: '#050a08',
-  bgSecondary: '#0a1210',
-  bgCard: '#0d1a15',
-  green: '#1a472a',
-  greenLight: '#2d6a4f',
-  greenAccent: '#40916c',
-  gold: '#c9a227',
-  goldLight: '#d4b742',
-  white: '#ffffff',
-  silver: '#c0c0c0',
-  muted: '#5a6b62',
-  blue: '#3b82f6',
-};
+import { COLORS } from '@/constants/colors';
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();

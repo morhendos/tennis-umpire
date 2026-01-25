@@ -1,78 +1,74 @@
 # Tennis Umpire 🎾
 
-A portable tennis scoring system with wireless clickers, audio announcements, and optional league integration.
-
-## The Problem
-
-Score disputes are common in amateur tennis. Players lose track mid-game, especially during long rallies or when tired. Existing solutions (like ScorePadel) don't work well for outdoor tennis courts due to sun glare, weatherproofing, and mounting challenges.
-
-## The Solution
-
-A simple, portable system where each player carries a small button clicker. Press it when you win a point, and the score is tracked automatically with audio announcements - like having your own personal umpire.
-
-## Architecture
-
-```
-[Player A Clicker] ──┐
-                     ├── Bluetooth ──► [Phone App] ──► [Speaker]
-[Player B Clicker] ──┘                      │
-                                            │ WiFi (optional)
-                                            ▼
-                                   [Tenis del Parque API]
-```
+A professional tennis umpire app with AI-powered voice announcements. Built with React Native / Expo.
 
 ## Features
 
-- **Offline-first**: Works without internet, syncs when available
-- **Audio announcements**: Hear the score after each point
-- **Full tennis scoring**: Handles deuce, advantage, tiebreaks, sets
-- **Undo support**: Fix mistakes easily
-- **League integration**: Optional sync with Tenis del Parque for live scores
+- **Professional Voice Announcements** - Google Cloud TTS, ElevenLabs, or Native TTS
+- **SSML Styling** - Dramatic announcements for match points, calm for changeovers
+- **Full Match Scoring** - Standard tennis scoring with tiebreaks
+- **Coin Flip** - Animated coin toss for serve selection
+- **Multi-language** - English, Spanish, French, Italian
+- **Offline Support** - Works without internet (with Native TTS)
 
-## Hardware
+## Quick Start
 
-### Phase 1: Prototype
-- 2x Flic buttons (~€55-60 total) - [flic.io](https://flic.io)
-- Any Bluetooth speaker
-- Phone/tablet running the app
+```bash
+# Install dependencies
+npm install
 
-### Phase 2: Custom (Future)
-- Custom ESP32-C3 clickers (~€10 each)
-- Branded enclosures
-- Optional e-ink display
+# Start development
+npx expo start
+```
+
+## Documentation
+
+| Doc | Description |
+|-----|-------------|
+| [Voice Setup](docs/VOICE-SETUP.md) | Configure Google Cloud, ElevenLabs, or Native TTS |
+| [SSML Styling](docs/SSML-STYLING.md) | How voice announcements are styled |
+| [Build & Deploy](docs/BUILD-DEPLOY.md) | Create APK/IPA for distribution |
+| [Architecture](docs/ARCHITECTURE.md) | Codebase structure and key files |
+| [Refactoring Plan](docs/REFACTORING_PLAN.md) | Codebase improvement roadmap |
 
 ## Tech Stack
 
-- **App**: React Native with react-native-ble-plx
-- **Audio**: Native text-to-speech
-- **Backend**: Optional API integration with Tenis del Parque
+- **Framework**: React Native with Expo (SDK 52)
+- **Router**: Expo Router (file-based)
+- **State**: Zustand with AsyncStorage persistence
+- **Audio**: Expo AV + Expo Speech
+- **Styling**: StyleSheet (Wimbledon-inspired dark theme)
+
+## Voice Engines Comparison
+
+| Engine | Quality | Cost | Offline |
+|--------|---------|------|---------|
+| Google Cloud TTS | ⭐⭐⭐⭐⭐ | ~€0.08/match (1M free/mo) | ❌ |
+| ElevenLabs | ⭐⭐⭐⭐⭐ | ~€0.80/match | ❌ |
+| Native TTS | ⭐⭐⭐ | Free | ✅ |
 
 ## Project Structure
 
 ```
 tennis-umpire/
-├── docs/
-│   └── PROJECT_SPEC.md    # Full project specification
-├── app/                    # React Native app (coming soon)
-├── api/                    # Backend endpoints (coming soon)
-└── README.md
+├── app/                 # Screens (Expo Router - file-based routing)
+│   ├── (tabs)/          # Tab screens
+│   │   └── index.tsx    # Main scoreboard
+│   └── settings.tsx     # Settings screen
+├── components/          # Reusable UI components
+├── constants/           # App constants (colors, config)
+├── lib/                 # Core business logic
+│   ├── speech.ts        # TTS engine + SSML
+│   ├── scoring.ts       # Tennis scoring rules
+│   ├── voiceStore.ts    # Voice settings (Zustand)
+│   ├── useMatch.ts      # Match state hook
+│   └── translations.ts  # i18n strings
+├── assets/              # Images, fonts
+├── docs/                # Documentation
+├── app.json             # Expo config
+└── package.json
 ```
 
-## Development Phases
+## License
 
-1. **Validate** - Test with Flic buttons + simple app
-2. **Improve** - Build proper React Native app with BLE
-3. **Integrate** - Connect to Tenis del Parque
-4. **Scale** - Custom hardware, club installations
-
-## Related Projects
-
-- [Tenis del Parque](https://github.com/morhendos/tenis-del-parque) - Tennis league platform (potential integration)
-
-## Status
-
-🚧 **Planning phase** - Awaiting Flic button purchase for prototyping
-
----
-
-*Created January 2025*
+MIT

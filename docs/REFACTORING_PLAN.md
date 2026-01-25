@@ -36,9 +36,9 @@ Reusable components are defined inline instead of in `/components`.
 - Similar button styles repeated
 - Gradient patterns repeated throughout
 
-#### 5. **Project Structure Confusion**
-The Expo project lives in `/app` folder, and Expo Router uses `/app/app` for routing.
-This is technically correct but confusing. We'll document it clearly.
+#### 5. ~~**Project Structure Confusion**~~ ✅ RESOLVED
+~~The Expo project lived in `/app` folder, and Expo Router used `/app/app` for routing.~~
+**Fixed:** Moved Expo project to root. Now `app/` is only for Expo Router.
 
 ---
 
@@ -46,56 +46,60 @@ This is technically correct but confusing. We'll document it clearly.
 
 ```
 tennis-umpire/
-├── app/                          # Expo project root
-│   ├── app/                      # Expo Router (file-based routing)
-│   │   ├── (tabs)/
-│   │   │   ├── _layout.tsx       # Tab navigation config
-│   │   │   ├── index.tsx         # Main screen (~100 lines, orchestrator only)
-│   │   │   └── explore.tsx       # Stats/history (future)
-│   │   ├── _layout.tsx           # Root layout
-│   │   ├── settings.tsx          # Settings screen (~300 lines)
-│   │   └── modal.tsx             # Modal route
+├── app/                              # Expo Router (file-based routing)
+│   ├── (tabs)/
+│   │   ├── _layout.tsx               # Tab navigation config
+│   │   ├── index.tsx                 # Main screen (~100 lines, orchestrator only)
+│   │   └── explore.tsx               # Stats/history (future)
+│   ├── _layout.tsx                   # Root layout
+│   ├── settings.tsx                  # Settings screen (~300 lines)
+│   └── modal.tsx                     # Modal route
+│
+├── components/                       # Reusable UI components
+│   ├── match/                        # Match-specific components
+│   │   ├── Scoreboard.tsx            # Portrait scoreboard
+│   │   ├── ScoreboardLandscape.tsx   # Landscape scoreboard
+│   │   ├── ScoreButtons.tsx          # Tap-to-score buttons
+│   │   ├── MatchComplete.tsx         # Winner celebration
+│   │   └── StatusBanner.tsx          # Deuce/Match Point banner
 │   │
-│   ├── components/               # Reusable UI components
-│   │   ├── match/                # Match-specific components
-│   │   │   ├── Scoreboard.tsx           # Portrait scoreboard
-│   │   │   ├── ScoreboardLandscape.tsx  # Landscape scoreboard
-│   │   │   ├── ScoreButtons.tsx         # Tap-to-score buttons
-│   │   │   ├── MatchComplete.tsx        # Winner celebration
-│   │   │   └── StatusBanner.tsx         # Deuce/Match Point banner
-│   │   │
-│   │   ├── setup/                # Setup flow components
-│   │   │   ├── PlayerSetup.tsx          # Step 1: Enter names
-│   │   │   ├── FormatSetup.tsx          # Step 2: Choose format
-│   │   │   └── CoinFlip.tsx             # Coin flip animation
-│   │   │
-│   │   ├── ui/                   # Generic UI primitives
-│   │   │   ├── AnimatedScore.tsx        # Animated number display
-│   │   │   ├── ServeIndicator.tsx       # Pulsing serve dot
-│   │   │   ├── IconButton.tsx           # Blur background icon button
-│   │   │   ├── GradientButton.tsx       # Reusable gradient button
-│   │   │   └── index.ts                 # Barrel exports
-│   │   │
-│   │   └── index.ts              # Main barrel export
+│   ├── setup/                        # Setup flow components
+│   │   ├── PlayerSetup.tsx           # Step 1: Enter names
+│   │   ├── FormatSetup.tsx           # Step 2: Choose format
+│   │   └── CoinFlip.tsx              # Coin flip animation
 │   │
-│   ├── constants/                # App-wide constants
-│   │   ├── colors.ts             # COLORS object
-│   │   ├── styles.ts             # Shared style utilities
-│   │   └── index.ts              # Barrel exports
+│   ├── ui/                           # Generic UI primitives
+│   │   ├── AnimatedScore.tsx         # Animated number display
+│   │   ├── ServeIndicator.tsx        # Pulsing serve dot
+│   │   ├── IconButton.tsx            # Blur background icon button
+│   │   ├── GradientButton.tsx        # Reusable gradient button
+│   │   └── index.ts                  # Barrel exports
 │   │
-│   ├── lib/                      # Business logic (keep as-is)
-│   │   ├── scoring.ts            # Tennis scoring rules
-│   │   ├── speech.ts             # TTS integration
-│   │   ├── useMatch.ts           # Match state hook
-│   │   ├── voiceStore.ts         # Voice settings
-│   │   ├── settings.ts           # App settings
-│   │   └── translations.ts       # i18n strings
-│   │
-│   ├── hooks/                    # Custom React hooks
-│   │   └── useOrientation.ts     # Screen orientation hook
-│   │
-│   └── types/                    # TypeScript types (if needed)
-│       └── match.ts              # Match-related types
+│   └── index.ts                      # Main barrel export
+│
+├── constants/                        # App-wide constants
+│   ├── colors.ts                     # COLORS object
+│   ├── styles.ts                     # Shared style utilities
+│   └── index.ts                      # Barrel exports
+│
+├── lib/                              # Business logic (keep as-is)
+│   ├── scoring.ts                    # Tennis scoring rules
+│   ├── speech.ts                     # TTS integration
+│   ├── useMatch.ts                   # Match state hook
+│   ├── voiceStore.ts                 # Voice settings
+│   ├── settings.ts                   # App settings
+│   └── translations.ts               # i18n strings
+│
+├── hooks/                            # Custom React hooks
+│   └── useOrientation.ts             # Screen orientation hook
+│
+├── types/                            # TypeScript types (if needed)
+│   └── match.ts                      # Match-related types
+│
+├── assets/                           # Images, fonts, etc.
+├── docs/                             # Documentation
+├── app.json                          # Expo config
+└── package.json
 ```
 
 ---
@@ -190,6 +194,11 @@ After refactoring:
 
 ## 🚀 Execution Log
 
+### ✅ Project Structure Cleanup
+- **Status**: ✅ Complete
+- **Date**: Jan 25, 2025
+- **Notes**: Moved Expo project from `tennis-umpire/app/` to root. Now `app/` is only for Expo Router.
+
 ### Step 1.1: Extract colors.ts
 - **Status**: ⏳ Pending
 - **Date**: -
@@ -206,13 +215,9 @@ After refactoring:
 
 ## 📝 Notes
 
-### Why not move the Expo project to root?
-The current structure (`tennis-umpire/app/`) works fine. Moving it would:
-- Break git history for all files
-- Require updating all CI/CD paths
-- Risk introducing bugs
-
-The inner `app/app/` is Expo Router's standard convention. We'll document this clearly in the README instead of restructuring.
+### ✅ Project Structure Cleaned Up
+Moved Expo project from `tennis-umpire/app/` to root `tennis-umpire/`.
+Now `app/` folder is only used for Expo Router (file-based routing) - much cleaner!
 
 ### Future Considerations
 - Consider extracting settings into separate route group `(settings)/`

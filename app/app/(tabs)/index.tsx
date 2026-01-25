@@ -168,7 +168,7 @@ const CoinFlip = ({
   playerB: string, 
   onComplete: (server: 'A' | 'B') => void 
 }) => {
-  const [phase, setPhase] = useState<'ready' | 'flipping' | 'result' | 'choose' | 'skip'>('ready');
+  const [phase, setPhase] = useState<'ready' | 'flipping' | 'result' | 'skip'>('ready');
   const [winner, setWinner] = useState<'A' | 'B' | null>(null);
   const coinRotation = useRef(new Animated.Value(0)).current;
   const coinScale = useRef(new Animated.Value(1)).current;
@@ -286,14 +286,7 @@ const CoinFlip = ({
     onComplete(server);
   };
 
-  const proceedToChoice = () => {
-    setPhase('choose');
-    Animated.timing(chooseOpacity, {
-      toValue: 1,
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
-  };
+
 
   const handleSkip = () => {
     setPhase('skip');
@@ -336,8 +329,7 @@ const CoinFlip = ({
         <Text style={styles.coinFlipSubtitle}>
           {phase === 'ready' && 'Tap the coin to flip'}
           {phase === 'flipping' && 'Flipping...'}
-          {phase === 'result' && `${winnerName} wins the toss!`}
-          {phase === 'choose' && `${winnerName}, choose:`}
+          {phase === 'result' && `${winnerName} wins! Choose:`}
           {phase === 'skip' && 'Select the player who will serve'}
         </Text>
       </Animated.View>
@@ -429,32 +421,9 @@ const CoinFlip = ({
         </View>
       )}
       
-      {/* Flip again hint */}
+      {/* Choice buttons - show directly after flip result */}
       {phase === 'result' && (
-        <Animated.View style={[styles.resultActions, { opacity: resultOpacity }]}>
-          <Text style={styles.flipAgainHint}>Tap coin to flip again</Text>
-          <TouchableOpacity style={styles.confirmTossBtn} onPress={proceedToChoice}>
-            <Text style={styles.confirmTossBtnText}>CONFIRM</Text>
-            <Ionicons name="checkmark" size={18} color={COLORS.greenAccent} />
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
-      {/* Result indicator - only show in choose phase */}
-      {phase === 'choose' && (
-        <Animated.View style={[styles.resultBadge, { opacity: resultOpacity }]}>
-          <View style={[
-            styles.resultDot, 
-            { backgroundColor: winner === 'A' ? COLORS.greenAccent : COLORS.gold }
-          ]} />
-          <Text style={styles.resultText}>{winnerName}</Text>
-          <Text style={styles.resultWins}>WINS THE TOSS</Text>
-        </Animated.View>
-      )}
-
-      {/* Choice buttons */}
-      {phase === 'choose' && (
-        <Animated.View style={[styles.choiceArea, { opacity: chooseOpacity }]}>
+        <Animated.View style={[styles.choiceArea, { opacity: resultOpacity }]}>
           <TouchableOpacity
             style={styles.choiceBtn}
             onPress={() => handleChoice('serve')}
@@ -488,6 +457,13 @@ const CoinFlip = ({
               <Text style={[styles.choiceBtnText, { color: winner === 'A' ? COLORS.white : COLORS.bgPrimary }]}>RECEIVE</Text>
             </LinearGradient>
           </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {/* Flip again hint - show below choice buttons */}
+      {phase === 'result' && (
+        <Animated.View style={[styles.flipAgainHintContainer, { opacity: resultOpacity }]}>
+          <Text style={styles.flipAgainHint}>Tap coin to flip again</Text>
         </Animated.View>
       )}
 
@@ -1632,7 +1608,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   coinTouchArea: {
-    marginTop: -140, // Shift coin up to make room for content below
+    marginTop: -80, // Shift coin up to make room for content below
   },
   coin: {
     width: 140,
@@ -1675,64 +1651,16 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     textAlign: 'center',
   },
-  resultActions: {
-    alignItems: 'center',
-    gap: 16,
-    position: 'absolute',
-    top: '52%',
-    left: 0,
-    right: 0,
-  },
-  confirmTossBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.bgCard,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.greenAccent + '40',
-  },
-  confirmTossBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.greenAccent,
-    letterSpacing: 2,
-  },
-  resultBadge: {
-    alignItems: 'center',
-    position: 'absolute',
-    top: '52%',
-    left: 0,
-    right: 0,
-  },
-  resultDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginBottom: 12,
-  },
-  resultText: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.white,
-    marginBottom: 4,
-  },
-  resultWins: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.muted,
-    letterSpacing: 2,
-  },
+
   choiceArea: {
     flexDirection: 'row',
     gap: 16,
-    position: 'absolute',
-    top: '66%',
-    left: 0,
-    right: 0,
+    marginTop: 32,
     justifyContent: 'center',
+  },
+  flipAgainHintContainer: {
+    marginTop: 20,
+    alignItems: 'center',
   },
   choiceBtn: {
     borderRadius: 16,

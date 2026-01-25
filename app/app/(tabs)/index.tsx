@@ -1792,7 +1792,7 @@ const styles = StyleSheet.create({
   // Skip button - prominent and easy to tap
   skipButton: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 150,
     left: 32,
     right: 32,
     backgroundColor: COLORS.bgCard,

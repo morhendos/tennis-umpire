@@ -506,17 +506,22 @@ const CoinFlip = ({
         </Animated.View>
       )}
 
-      {/* Skip link - only show in ready phase */}
+      {/* Skip button - only show in ready phase */}
       {phase === 'ready' && (
-        <TouchableOpacity style={styles.skipLink} onPress={handleSkip} activeOpacity={0.7}>
-          <Text style={styles.skipLinkText}>Already decided? Skip coin toss</Text>
+        <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.8}>
+          <View style={styles.skipButtonInner}>
+            <Feather name="skip-forward" size={20} color={COLORS.silver} />
+            <Text style={styles.skipButtonText}>SKIP COIN TOSS</Text>
+          </View>
+          <Text style={styles.skipButtonHint}>Already decided who serves?</Text>
         </TouchableOpacity>
       )}
 
-      {/* Back to coin toss link - only show in skip phase */}
+      {/* Back to coin toss button - only show in skip phase */}
       {phase === 'skip' && (
-        <TouchableOpacity style={styles.skipLink} onPress={() => setPhase('ready')} activeOpacity={0.7}>
-          <Text style={styles.skipLinkText}>← Back to coin toss</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => setPhase('ready')} activeOpacity={0.8}>
+          <Feather name="arrow-left" size={18} color={COLORS.silver} />
+          <Text style={styles.backButtonText}>BACK TO COIN TOSS</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -1784,18 +1789,57 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.muted + '40',
   },
 
-  // Skip link
-  skipLink: {
+  // Skip button - prominent and easy to tap
+  skipButton: {
     position: 'absolute',
-    bottom: 20,
-    left: 0,
-    right: 0,
+    bottom: 24,
+    left: 32,
+    right: 32,
+    backgroundColor: COLORS.bgCard,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: COLORS.muted + '40',
     alignItems: 'center',
   },
-  skipLinkText: {
-    fontSize: 14,
+  skipButtonInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
+  skipButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.silver,
+    letterSpacing: 2,
+  },
+  skipButtonHint: {
+    fontSize: 12,
     color: COLORS.muted,
-    textDecorationLine: 'underline',
+  },
+  backButton: {
+    position: 'absolute',
+    bottom: 24,
+    left: 32,
+    right: 32,
+    backgroundColor: COLORS.bgCard,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: COLORS.muted + '40',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.silver,
+    letterSpacing: 1,
   },
 
   // Skip selection area

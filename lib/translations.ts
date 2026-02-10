@@ -43,6 +43,15 @@ export const translations = {
     tiebreak: 'Tiebreak',
     superTiebreak: 'Match tiebreak, first to ten',
     
+    // Full score announcement
+    firstSet: 'First set',
+    secondSet: 'Second set',
+    thirdSet: 'Third set',
+    fourthSet: 'Fourth set',
+    fifthSet: 'Fifth set',
+    setsTo: 'sets to',
+    setsAll: 'sets all',
+
     // Match start
     versus: 'versus',
   },
@@ -90,6 +99,15 @@ export const translations = {
     tiebreak: 'Muerte súbita',
     superTiebreak: 'Super tiebreak, el primero a diez',
     
+    // Full score announcement
+    firstSet: 'Primer set',
+    secondSet: 'Segundo set',
+    thirdSet: 'Tercer set',
+    fourthSet: 'Cuarto set',
+    fifthSet: 'Quinto set',
+    setsTo: 'sets a',
+    setsAll: 'sets iguales',
+
     // Match start
     versus: 'contra',
   },
@@ -137,6 +155,15 @@ export const translations = {
     tiebreak: 'Jeu décisif',
     superTiebreak: 'Super jeu décisif, premier à dix',
     
+    // Full score announcement
+    firstSet: 'Premier set',
+    secondSet: 'Deuxième set',
+    thirdSet: 'Troisième set',
+    fourthSet: 'Quatrième set',
+    fifthSet: 'Cinquième set',
+    setsTo: 'sets à',
+    setsAll: 'sets partout',
+
     // Match start
     versus: 'contre',
   },
@@ -184,6 +211,15 @@ export const translations = {
     tiebreak: 'Tiebreak',
     superTiebreak: 'Super tiebreak, primo a dieci',
     
+    // Full score announcement
+    firstSet: 'Primo set',
+    secondSet: 'Secondo set',
+    thirdSet: 'Terzo set',
+    fourthSet: 'Quarto set',
+    fifthSet: 'Quinto set',
+    setsTo: 'set a',
+    setsAll: 'set pari',
+
     // Match start
     versus: 'contro',
   },

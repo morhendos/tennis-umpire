@@ -3,7 +3,7 @@ import { Audio } from 'expo-av';
 import { Alert } from 'react-native';
 import { MatchState, getMatchStatus, MatchStatus } from './scoring';
 import { useVoiceStore } from './voiceStore';
-import { t, LanguageCode } from './translations';
+import { t, LanguageCode, TranslationKey } from './translations';
 
 // API URLs
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
@@ -705,24 +705,29 @@ export function announceFullScore(state: MatchState) {
     return;
   }
 
+  const setOrdinals: TranslationKey[] = ['firstSet', 'secondSet', 'thirdSet', 'fourthSet', 'fifthSet'];
   let parts: string[] = [];
 
-  // 1. Completed sets
-  if (sets.length > 0) {
-    const setParts = sets.map(s => `${s.A}-${s.B}`);
-    parts.push(setParts.join(', '));
+  // 1. Completed sets (last entry in sets[] is always the current in-progress set)
+  const completedSets = sets.slice(0, -1);
+  if (completedSets.length > 0) {
+    for (let i = 0; i < completedSets.length; i++) {
+      const label = t(setOrdinals[i], lang);
+      parts.push(`${label} ${completedSets[i].A}-${completedSets[i].B}`);
+    }
   }
 
   // 2. Current set games
+  const currentSetNumber = completedSets.length;
+  const currentSetLabel = t(setOrdinals[currentSetNumber] || setOrdinals[0], lang);
   const totalGames = games.A + games.B;
   if (totalGames > 0) {
     if (games.A === games.B) {
-      parts.push(`${games.A} ${t('gamesAll', lang)}`);
+      parts.push(`${currentSetLabel} ${games.A} ${t('gamesAll', lang)}`);
     } else {
-      // Leader first
       const leader = games.A > games.B ? 'A' : 'B';
       const trailer = leader === 'A' ? 'B' : 'A';
-      parts.push(`${players[leader].name} ${t('leads', lang)} ${games[leader]}-${games[trailer]}`);
+      parts.push(`${currentSetLabel} ${players[leader].name} ${t('leads', lang)} ${games[leader]}-${games[trailer]}`);
     }
   }
 

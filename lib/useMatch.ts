@@ -163,7 +163,14 @@ export function useMatch(): UseMatchReturn {
     const previousState = history[history.length - 1];
     setHistory((prev) => prev.slice(0, -1));
     setMatch(previousState);
-  }, [history]);
+
+    // Announce the restored score
+    if (audioEnabled) {
+      setTimeout(() => {
+        announceScore(previousState);
+      }, 300);
+    }
+  }, [history, audioEnabled]);
 
   const resetMatch = useCallback(() => {
     cancelServeTimer(); // Cancel any pending announcements

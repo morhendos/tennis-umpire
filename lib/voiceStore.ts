@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
+
+// Get API keys from environment (via app.config.js extra)
+const ENV_ELEVENLABS_KEY = Constants.expoConfig?.extra?.elevenLabsApiKey || '';
+const ENV_GOOGLE_TTS_KEY = Constants.expoConfig?.extra?.googleTtsApiKey || '';
 
 export interface VoiceSettings {
   voiceId: string;
@@ -149,9 +154,10 @@ export const useVoiceStore = create<VoiceStore>()(
       googleSettings: DEFAULT_GOOGLE_SETTINGS,
       language: 'en',
       audioEnabled: true,
-      voiceEngine: 'google' as VoiceEngine, // Default to Google now
-      elevenLabsApiKey: '',
-      googleApiKey: '',
+      voiceEngine: 'google' as VoiceEngine,
+      // Use env vars as defaults, can be overridden by user
+      elevenLabsApiKey: ENV_ELEVENLABS_KEY,
+      googleApiKey: ENV_GOOGLE_TTS_KEY,
 
       setVoiceId: (voiceId: string) =>
         set((state) => {
@@ -236,13 +242,25 @@ export const useVoiceStore = create<VoiceStore>()(
         googleSettings: DEFAULT_GOOGLE_SETTINGS,
         language: 'en',
         voiceEngine: 'google',
-        elevenLabsApiKey: '',
-        googleApiKey: '',
+        // Reset to env vars, not empty strings
+        elevenLabsApiKey: ENV_ELEVENLABS_KEY,
+        googleApiKey: ENV_GOOGLE_TTS_KEY,
       }),
     }),
     {
       name: 'voice-settings',
       storage: createJSONStorage(() => AsyncStorage),
+      // Merge persisted state with env vars - env vars take precedence if persisted value is empty
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<VoiceStore>;
+        return {
+          ...currentState,
+          ...persisted,
+          // If persisted key is empty but env var exists, use env var
+          elevenLabsApiKey: persisted?.elevenLabsApiKey || ENV_ELEVENLABS_KEY,
+          googleApiKey: persisted?.googleApiKey || ENV_GOOGLE_TTS_KEY,
+        };
+      },
     }
   )
 );

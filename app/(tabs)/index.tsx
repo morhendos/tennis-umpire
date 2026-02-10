@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMatch } from '@/lib/useMatch';
+import { useFlic } from '@/lib/useFlic';
+import { announceFullScore } from '@/lib/speech';
 import { MatchFormatType } from '@/lib/scoring';
 import { COLORS } from '@/constants/colors';
 import { CoinFlip } from '@/components/CoinFlip';
@@ -12,6 +14,20 @@ import { ScreenWrapper } from '@/components/ScreenWrapper';
 export default function ScoreboardScreen() {
   const insets = useSafeAreaInsets();
   const { match, startMatch, scorePoint, undo, resetMatch, canUndo, audioEnabled, toggleAudio } = useMatch();
+
+  // Connect Flic buttons to match scoring
+  useFlic({
+    onScorePoint: useCallback((player: 'A' | 'B') => {
+      if (match) scorePoint(player);
+    }, [match, scorePoint]),
+    onUndo: useCallback(() => {
+      if (match && canUndo) undo();
+    }, [match, canUndo, undo]),
+    onAnnounceScore: useCallback(() => {
+      if (match) announceFullScore(match);
+    }, [match]),
+    enabled: !!match,
+  });
   
   // Setup state
   const [playerAName, setPlayerAName] = useState('');

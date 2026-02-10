@@ -692,6 +692,80 @@ export function announceSuperTiebreak() {
   speak(t('superTiebreak', lang), 'dramatic');
 }
 
+// Announce full match score (for hold button / on-demand)
+// Gives the complete picture: sets, games, and points
+export function announceFullScore(state: MatchState) {
+  const lang = getLang();
+  const status = getMatchStatus(state);
+  const { players, points, games, sets, tiebreak, tiebreakPoints, server } = state;
+
+  // If match complete, just announce the winner
+  if (status === 'match_complete') {
+    announceScore(state);
+    return;
+  }
+
+  let parts: string[] = [];
+
+  // 1. Completed sets
+  if (sets.length > 0) {
+    const setParts = sets.map(s => `${s.A}-${s.B}`);
+    parts.push(setParts.join(', '));
+  }
+
+  // 2. Current set games
+  const totalGames = games.A + games.B;
+  if (totalGames > 0) {
+    if (games.A === games.B) {
+      parts.push(`${games.A} ${t('gamesAll', lang)}`);
+    } else {
+      // Leader first
+      const leader = games.A > games.B ? 'A' : 'B';
+      const trailer = leader === 'A' ? 'B' : 'A';
+      parts.push(`${players[leader].name} ${t('leads', lang)} ${games[leader]}-${games[trailer]}`);
+    }
+  }
+
+  // 3. Current game points — only if not 0-0 (changeover/new game)
+  const isNewGame = !tiebreak && points.A === 0 && points.B === 0;
+  const isTiebreakStart = tiebreak && tiebreakPoints.A === 0 && tiebreakPoints.B === 0;
+
+  if (!isNewGame && !isTiebreakStart) {
+    if (tiebreak) {
+      const pA = tiebreakPoints.A;
+      const pB = tiebreakPoints.B;
+      if (pA === pB) {
+        parts.push(`${t('tiebreak', lang)} ${pA}-${t('all', lang)}`);
+      } else {
+        parts.push(`${t('tiebreak', lang)} ${Math.max(pA, pB)}-${Math.min(pA, pB)}`);
+      }
+    } else if (status === 'deuce') {
+      parts.push(t('deuce', lang));
+    } else if (status === 'advantage_A') {
+      parts.push(`${t('advantage', lang)} ${players.A.name}`);
+    } else if (status === 'advantage_B') {
+      parts.push(`${t('advantage', lang)} ${players.B.name}`);
+    } else {
+      const serverWord = pointToWord(points[server]);
+      const receiverWord = pointToWord(points[server === 'A' ? 'B' : 'A']);
+      if (points[server] === points[server === 'A' ? 'B' : 'A']) {
+        parts.push(`${serverWord}-${t('all', lang)}`);
+      } else {
+        parts.push(`${serverWord}-${receiverWord}`);
+      }
+    }
+  }
+
+  // If no sets and no games played, just announce the point score
+  if (parts.length === 0) {
+    announceScore(state);
+    return;
+  }
+
+  const announcement = parts.join('... ');
+  speak(announcement, 'calm');
+}
+
 // Announce match start
 export function announceMatchStart(playerA: string, playerB: string, serverName?: string) {
   const lang = getLang();

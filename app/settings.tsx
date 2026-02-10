@@ -168,6 +168,24 @@ export default function SettingsScreen() {
             </View>
           </View>
 
+          {/* Flic Buttons */}
+          <TouchableOpacity 
+            style={styles.section} 
+            onPress={() => router.push('/flic-setup')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.row}>
+              <View style={styles.rowInfo}>
+                <Ionicons name="radio-button-on-outline" size={22} color={COLORS.blue} />
+                <View>
+                  <Text style={styles.label}>Flic Buttons</Text>
+                  <Text style={styles.hint}>Physical clickers for scoring</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.muted} />
+            </View>
+          </TouchableOpacity>
+
           {/* Voice Engine */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>VOICE ENGINE</Text>

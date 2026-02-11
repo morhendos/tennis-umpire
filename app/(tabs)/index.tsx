@@ -16,7 +16,7 @@ export default function ScoreboardScreen() {
   const { match, startMatch, scorePoint, undo, resetMatch, canUndo, audioEnabled, toggleAudio } = useMatch();
 
   // Connect Flic buttons to match scoring
-  useFlic({
+  const flic = useFlic({
     onScorePoint: useCallback((player: 'A' | 'B') => {
       if (match) scorePoint(player);
     }, [match, scorePoint]),
@@ -93,11 +93,21 @@ export default function ScoreboardScreen() {
         onNextStep={handleNextStep}
         onBackStep={handleBackStep}
         onBeginMatch={handleBeginMatch}
+        flicState={{
+          isInitialized: flic.isInitialized,
+          buttons: flic.buttons,
+          assignments: flic.assignments,
+          swapAssignments: flic.swapAssignments,
+        }}
       />
     );
   }
 
   // Match Screen (Portrait or Landscape)
+  const flicActive = flic.isInitialized 
+    && !!flic.assignments.playerA 
+    && !!flic.assignments.playerB;
+
   return (
     <MatchScreen
       match={match}
@@ -107,6 +117,7 @@ export default function ScoreboardScreen() {
       audioEnabled={audioEnabled}
       toggleAudio={toggleAudio}
       onResetMatch={handleResetMatch}
+      flicActive={flicActive}
     />
   );
 }

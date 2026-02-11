@@ -39,6 +39,8 @@ class FlicService {
   private buttons: Map<FlicButtonId, FlicButton> = new Map();
   private assignments: ButtonAssignments = { playerA: null, playerB: null };
   private eventListeners: Set<FlicEventCallback> = new Set();
+  private scanCompletionCallbacks: Set<(button?: FlicButton) => void> = new Set();
+  private _isScanning = false;
 
   async initialize(): Promise<boolean> {
     if (this.isInitialized) return true;
@@ -115,9 +117,23 @@ class FlicService {
     // Scan result
     Flic2.addListener('scanResult', (result: any) => {
       console.log('[Flic] Scan result:', result);
-      if (result.button && !result.error) {
+
+      if (result.event === 'completion') {
+        // Library has stopped scanning after finding a button (or error)
+        this._isScanning = false;
+
+        if (result.button && !result.error) {
+          const button = this.updateButtonFromFlic2Button(result.button);
+          this.setButtonMode(result.button.getUuid());
+          console.log('[Flic] Button paired:', button.name);
+          this.notifyScanCompletion(button);
+        } else {
+          console.log('[Flic] Scan completed without button, error:', result.error, 'result:', result.result);
+          this.notifyScanCompletion(undefined);
+        }
+      } else if (result.button) {
+        // Mid-scan discovery update
         this.updateButtonFromFlic2Button(result.button);
-        this.setButtonMode(result.button.getUuid());
       }
     });
   }
@@ -183,9 +199,11 @@ class FlicService {
       await this.initialize();
     }
     try {
+      this._isScanning = true;
       Flic2.startScan();
       console.log('[Flic] Scan started');
     } catch (error) {
+      this._isScanning = false;
       console.error('[Flic] Scan failed:', error);
       throw error;
     }
@@ -193,11 +211,27 @@ class FlicService {
 
   stopScan(): void {
     try {
+      this._isScanning = false;
       Flic2.stopScan();
       console.log('[Flic] Scan stopped');
     } catch (error) {
       console.error('[Flic] Stop scan failed:', error);
     }
+  }
+
+  get isCurrentlyScanning(): boolean {
+    return this._isScanning;
+  }
+
+  onScanComplete(callback: (button?: FlicButton) => void): () => void {
+    this.scanCompletionCallbacks.add(callback);
+    return () => this.scanCompletionCallbacks.delete(callback);
+  }
+
+  private notifyScanCompletion(button?: FlicButton): void {
+    this.scanCompletionCallbacks.forEach(cb => {
+      try { cb(button); } catch (e) { console.error('[Flic] Scan callback error:', e); }
+    });
   }
 
   async connectButton(buttonId: FlicButtonId): Promise<boolean> {

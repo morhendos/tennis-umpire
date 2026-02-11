@@ -15,6 +15,7 @@ export default {
         NSBluetoothAlwaysUsageDescription: "Tennis Umpire uses Bluetooth to connect to Flic buttons for score tracking",
         NSBluetoothPeripheralUsageDescription: "Tennis Umpire uses Bluetooth to connect to Flic buttons for score tracking",
         NSLocationWhenInUseUsageDescription: "Tennis Umpire needs location access to scan for Bluetooth devices",
+        UIBackgroundModes: ["audio", "bluetooth-central"],
       },
     },
     android: {

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
   PermissionsAndroid,
   Linking,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +18,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COLORS } from '@/constants/colors';
 import { useFlic } from '@/lib/useFlic';
-import { FlicButton } from '@/lib/flic';
+import { FlicButton, FlicEvent, flicService } from '@/lib/flic';
+
+const EVENT_LABELS: Record<string, { label: string; icon: string; color: string }> = {
+  click:       { label: 'Single Click', icon: 'finger-print-outline', color: COLORS.greenAccent },
+  doubleClick: { label: 'Double Click', icon: 'copy-outline',         color: COLORS.gold },
+  hold:        { label: 'Long Press',   icon: 'time-outline',         color: COLORS.blue },
+};
+
+interface TestEvent {
+  id: number;
+  player: 'A' | 'B' | null;
+  eventType: string;
+  buttonName: string;
+  timestamp: number;
+}
 
 async function requestBluetoothPermissions(): Promise<boolean> {
   if (Platform.OS !== 'android') return true;
@@ -113,7 +128,6 @@ async function requestBluetoothPermissions(): Promise<boolean> {
 export default function FlicSetupScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [selectedButton, setSelectedButton] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
 
   const {
@@ -123,8 +137,8 @@ export default function FlicSetupScreen() {
     assignments,
     startScan,
     stopScan,
-    assignButton,
     clearAssignment,
+    swapAssignments,
     forgetButton,
   } = useFlic({});
 
@@ -146,12 +160,6 @@ export default function FlicSetupScreen() {
       }
     }
   }, [isScanning, startScan, stopScan]);
-
-  const handleAssign = useCallback((player: 'A' | 'B') => {
-    if (!selectedButton) return;
-    assignButton(selectedButton, player);
-    setSelectedButton(null);
-  }, [selectedButton, assignButton]);
 
   const handleForget = useCallback((buttonId: string) => {
     Alert.alert(
@@ -178,6 +186,40 @@ export default function FlicSetupScreen() {
 
   const playerAButton = getPlayerButton('A');
   const playerBButton = getPlayerButton('B');
+  const hasBothButtons = buttons.length >= 2;
+  const hasAnyAssigned = !!assignments.playerA || !!assignments.playerB;
+
+  // ─── Live test events ───────────────────
+  const [testEvents, setTestEvents] = useState<TestEvent[]>([]);
+  const eventIdRef = useRef(0);
+  const flashAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const unsubscribe = flicService.addEventListener((event: FlicEvent) => {
+      const player = flicService.getPlayerForButton(event.buttonId);
+      const button = buttons.find(b => b.uuid === event.buttonId);
+
+      const testEvent: TestEvent = {
+        id: ++eventIdRef.current,
+        player,
+        eventType: event.eventType,
+        buttonName: button?.name || event.buttonId.slice(-8),
+        timestamp: Date.now(),
+      };
+
+      setTestEvents(prev => [testEvent, ...prev].slice(0, 8));
+
+      // Flash animation
+      Animated.sequence([
+        Animated.timing(flashAnim, { toValue: 1, duration: 100, useNativeDriver: false }),
+        Animated.timing(flashAnim, { toValue: 0, duration: 600, useNativeDriver: false }),
+      ]).start();
+    });
+
+    return unsubscribe;
+  }, [isInitialized, buttons, flashAnim]);
 
   return (
     <View style={styles.container}>
@@ -194,25 +236,65 @@ export default function FlicSetupScreen() {
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>BUTTON CONTROLS</Text>
-            <View style={styles.instructionCard}>
-              <View style={styles.instructionRow}>
-                <View style={styles.instructionIcon}><Ionicons name="finger-print-outline" size={20} color={COLORS.greenAccent} /></View>
-                <View style={styles.instructionText}><Text style={styles.instructionLabel}>Single Click</Text><Text style={styles.instructionDesc}>Score point for player</Text></View>
-              </View>
-              <View style={styles.instructionRow}>
-                <View style={styles.instructionIcon}><Ionicons name="copy-outline" size={20} color={COLORS.gold} /></View>
-                <View style={styles.instructionText}><Text style={styles.instructionLabel}>Double Click</Text><Text style={styles.instructionDesc}>Undo last point</Text></View>
-              </View>
-              <View style={styles.instructionRow}>
-                <View style={styles.instructionIcon}><Ionicons name="time-outline" size={20} color={COLORS.blue} /></View>
-                <View style={styles.instructionText}><Text style={styles.instructionLabel}>Long Press</Text><Text style={styles.instructionDesc}>Announce current score</Text></View>
-              </View>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitleInline}>AVAILABLE BUTTONS</Text>
+              <TouchableOpacity 
+                style={[styles.scanBtn, isScanning && styles.scanBtnActive, hasBothButtons && !isScanning && styles.scanBtnDisabled]} 
+                onPress={handleScanToggle}
+                disabled={hasBothButtons && !isScanning}
+              >
+                {isScanning ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="bluetooth" size={18} color={hasBothButtons ? COLORS.muted : COLORS.blue} />}
+                <Text style={[styles.scanBtnText, isScanning && styles.scanBtnTextActive, hasBothButtons && !isScanning && styles.scanBtnTextDisabled]}>
+                  {isScanning ? 'Scanning...' : hasBothButtons ? 'Paired' : 'Scan'}
+                </Text>
+              </TouchableOpacity>
             </View>
+
+            {scanError && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="warning" size={20} color={COLORS.gold} />
+                <Text style={styles.errorText}>{scanError}</Text>
+              </View>
+            )}
+
+            {!isInitialized ? (
+              <View style={styles.loadingContainer}><ActivityIndicator size="large" color={COLORS.greenAccent} /><Text style={styles.loadingText}>Initializing Bluetooth...</Text></View>
+            ) : buttons.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="bluetooth-outline" size={48} color={COLORS.muted} />
+                <Text style={styles.emptyTitle}>No Buttons Found</Text>
+                <Text style={styles.emptyDesc}>Tap Scan above, then press and hold your Flic button for 8 seconds until the LED flashes rapidly.</Text>
+              </View>
+            ) : (
+              <View style={styles.buttonList}>
+                {buttons.map((button) => {
+                  const assignment = getButtonAssignment(button.uuid);
+                  return (
+                    <TouchableOpacity key={button.uuid} style={styles.buttonCard} onLongPress={() => handleForget(button.uuid)} activeOpacity={0.7}>
+                      <View style={styles.buttonLeft}>
+                        <View style={[styles.connectionDot, button.isConnected && styles.connectionDotActive]} />
+                        <View><Text style={styles.buttonCardName}>{button.name}</Text><Text style={styles.buttonCardId}>{button.serialNumber || button.uuid.slice(-8)}</Text></View>
+                      </View>
+                      <View style={styles.buttonRight}>
+                        {assignment && <View style={[styles.assignmentBadge, assignment === 'A' ? styles.assignmentBadgeA : styles.assignmentBadgeB]}><Text style={styles.assignmentBadgeText}>{assignment}</Text></View>}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>PLAYER ASSIGNMENTS</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitleInline}>PLAYER ASSIGNMENTS</Text>
+              {playerAButton && playerBButton && (
+                <TouchableOpacity style={styles.swapBtn} onPress={swapAssignments} activeOpacity={0.7}>
+                  <Ionicons name="swap-horizontal" size={16} color={COLORS.gold} />
+                  <Text style={styles.swapBtnText}>Swap</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <View style={[styles.playerCard, styles.playerCardA]}>
               <View style={styles.playerHeader}>
                 <View style={styles.playerBadge}><Text style={styles.playerBadgeText}>A</Text></View>
@@ -245,62 +327,97 @@ export default function FlicSetupScreen() {
             </View>
           </View>
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitleInline}>AVAILABLE BUTTONS</Text>
-              <TouchableOpacity style={[styles.scanBtn, isScanning && styles.scanBtnActive]} onPress={handleScanToggle}>
-                {isScanning ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="bluetooth" size={18} color={COLORS.blue} />}
-                <Text style={[styles.scanBtnText, isScanning && styles.scanBtnTextActive]}>{isScanning ? 'Scanning...' : 'Scan'}</Text>
-              </TouchableOpacity>
-            </View>
-
-            {scanError && (
-              <View style={styles.errorContainer}>
-                <Ionicons name="warning" size={20} color={COLORS.gold} />
-                <Text style={styles.errorText}>{scanError}</Text>
+          {/* Live Test */}
+          {hasAnyAssigned && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitleInline}>LIVE TEST</Text>
+                {testEvents.length > 0 && (
+                  <TouchableOpacity onPress={() => setTestEvents([])} activeOpacity={0.7}>
+                    <Text style={styles.clearEventsText}>Clear</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            )}
 
-            {!isInitialized ? (
-              <View style={styles.loadingContainer}><ActivityIndicator size="large" color={COLORS.greenAccent} /><Text style={styles.loadingText}>Initializing Bluetooth...</Text></View>
-            ) : buttons.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="bluetooth-outline" size={48} color={COLORS.muted} />
-                <Text style={styles.emptyTitle}>No Buttons Found</Text>
-                <Text style={styles.emptyDesc}>Press and hold your Flic button for 8 seconds until the LED flashes, then tap Scan.</Text>
-              </View>
-            ) : (
-              <View style={styles.buttonList}>
-                {buttons.map((button) => {
-                  const assignment = getButtonAssignment(button.uuid);
-                  const isSelected = selectedButton === button.uuid;
-                  return (
-                    <TouchableOpacity key={button.uuid} style={[styles.buttonCard, isSelected && styles.buttonCardSelected, assignment && styles.buttonCardAssigned]} onPress={() => setSelectedButton(isSelected ? null : button.uuid)} onLongPress={() => handleForget(button.uuid)}>
-                      <View style={styles.buttonLeft}>
-                        <View style={[styles.connectionDot, button.isConnected && styles.connectionDotActive]} />
-                        <View><Text style={styles.buttonCardName}>{button.name}</Text><Text style={styles.buttonCardId}>{button.serialNumber || button.uuid.slice(-8)}</Text></View>
+              {testEvents.length === 0 ? (
+                <Animated.View style={[
+                  styles.testEmptyCard,
+                  { borderColor: flashAnim.interpolate({ inputRange: [0, 1], outputRange: [COLORS.muted + '20', COLORS.greenAccent + '60'] }) },
+                ]}>
+                  <Ionicons name="radio-outline" size={28} color={COLORS.muted} />
+                  <Text style={styles.testEmptyText}>Press a Flic button to test</Text>
+                  <Text style={styles.testEmptyHint}>Try single click, double click, and long press</Text>
+                </Animated.View>
+              ) : (
+                <View style={styles.testEventList}>
+                  {testEvents.map((evt, index) => {
+                    const meta = EVENT_LABELS[evt.eventType] || { label: evt.eventType, icon: 'help-outline', color: COLORS.muted };
+                    const isLatest = index === 0;
+                    const playerColor = evt.player === 'A' ? COLORS.greenAccent : evt.player === 'B' ? COLORS.blue : COLORS.muted;
+                    return (
+                      <View key={evt.id} style={[styles.testEventRow, isLatest && styles.testEventRowLatest]}>
+                        <View style={[styles.testEventDot, { backgroundColor: playerColor }]} />
+                        <View style={styles.testEventInfo}>
+                          <View style={styles.testEventTop}>
+                            <Text style={[styles.testEventPlayer, { color: playerColor }]}>
+                              {evt.player ? `Player ${evt.player}` : 'Unassigned'}
+                            </Text>
+                            <View style={styles.testEventTypeBadge}>
+                              <Ionicons name={meta.icon as any} size={12} color={meta.color} />
+                              <Text style={[styles.testEventTypeText, { color: meta.color }]}>{meta.label}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.testEventButton}>{evt.buttonName}</Text>
+                        </View>
                       </View>
-                      <View style={styles.buttonRight}>
-                        {assignment && <View style={[styles.assignmentBadge, assignment === 'A' ? styles.assignmentBadgeA : styles.assignmentBadgeB]}><Text style={styles.assignmentBadgeText}>{assignment}</Text></View>}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
-
-            {selectedButton && !getButtonAssignment(selectedButton) && (
-              <View style={styles.assignActions}>
-                <Text style={styles.assignLabel}>Assign to:</Text>
-                <View style={styles.assignButtons}>
-                  <TouchableOpacity style={[styles.assignBtn, styles.assignBtnA]} onPress={() => handleAssign('A')}><Text style={styles.assignBtnText}>Player A</Text></TouchableOpacity>
-                  <TouchableOpacity style={[styles.assignBtn, styles.assignBtnB]} onPress={() => handleAssign('B')}><Text style={styles.assignBtnText}>Player B</Text></TouchableOpacity>
+                    );
+                  })}
                 </View>
+              )}
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>BUTTON CONTROLS</Text>
+            <View style={styles.instructionCard}>
+              <View style={styles.instructionRow}>
+                <View style={styles.instructionIcon}><Ionicons name="finger-print-outline" size={20} color={COLORS.greenAccent} /></View>
+                <View style={styles.instructionText}><Text style={styles.instructionLabel}>Single Click</Text><Text style={styles.instructionDesc}>Score point for player</Text></View>
               </View>
-            )}
+              <View style={styles.instructionRow}>
+                <View style={styles.instructionIcon}><Ionicons name="copy-outline" size={20} color={COLORS.gold} /></View>
+                <View style={styles.instructionText}><Text style={styles.instructionLabel}>Double Click</Text><Text style={styles.instructionDesc}>Undo last point</Text></View>
+              </View>
+              <View style={styles.instructionRow}>
+                <View style={styles.instructionIcon}><Ionicons name="time-outline" size={20} color={COLORS.blue} /></View>
+                <View style={styles.instructionText}><Text style={styles.instructionLabel}>Long Press</Text><Text style={styles.instructionDesc}>Announce current score</Text></View>
+              </View>
+            </View>
           </View>
 
-          <View style={styles.section}><Text style={styles.helpText}>Long press a button to forget it</Text></View>
+          {/* Pairing Tips */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>PAIRING TIPS</Text>
+            <View style={styles.tipCard}>
+              <View style={styles.tipRow}>
+                <Text style={styles.tipNumber}>1</Text>
+                <Text style={styles.tipText}>Tap <Text style={styles.tipBold}>Scan</Text> above to start searching</Text>
+              </View>
+              <View style={styles.tipRow}>
+                <Text style={styles.tipNumber}>2</Text>
+                <Text style={styles.tipText}>Press and hold the Flic button for <Text style={styles.tipBold}>8 seconds</Text> until the LED flashes rapidly</Text>
+              </View>
+              <View style={styles.tipRow}>
+                <Text style={styles.tipNumber}>3</Text>
+                <Text style={styles.tipText}>Buttons are <Text style={styles.tipBold}>automatically assigned</Text> — first to Player A, second to Player B</Text>
+              </View>
+              <View style={styles.tipRow}>
+                <Text style={styles.tipNumber}>4</Text>
+                <Text style={styles.tipText}>Use <Text style={styles.tipBold}>Swap</Text> to flip assignments if needed</Text>
+              </View>
+            </View>
+            <Text style={styles.helpText}>Long press a paired button to forget it</Text>
+          </View>
           <View style={styles.bottomPadding} />
         </ScrollView>
       </View>
@@ -339,10 +456,14 @@ const styles = StyleSheet.create({
   buttonName: { fontSize: 14, color: COLORS.silver },
   clearBtn: { padding: 4 },
   noButtonText: { fontSize: 14, color: COLORS.muted, fontStyle: 'italic' },
+  swapBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: COLORS.gold + '15', borderRadius: 14 },
+  swapBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.gold },
   scanBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.blue + '20', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20 },
   scanBtnActive: { backgroundColor: COLORS.blue },
   scanBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.blue },
   scanBtnTextActive: { color: COLORS.white },
+  scanBtnDisabled: { backgroundColor: COLORS.muted + '15' },
+  scanBtnTextDisabled: { color: COLORS.muted },
   loadingContainer: { alignItems: 'center', paddingVertical: 40, gap: 16 },
   loadingText: { fontSize: 14, color: COLORS.muted },
   emptyContainer: { alignItems: 'center', paddingVertical: 40, gap: 12 },
@@ -352,8 +473,7 @@ const styles = StyleSheet.create({
   errorText: { color: COLORS.gold, fontSize: 13, flex: 1 },
   buttonList: { gap: 10 },
   buttonCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.bgCard, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: COLORS.muted + '20' },
-  buttonCardSelected: { borderColor: COLORS.gold, backgroundColor: COLORS.gold + '10' },
-  buttonCardAssigned: { opacity: 0.7 },
+
   buttonLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   connectionDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.muted },
   connectionDotActive: { backgroundColor: COLORS.greenAccent },
@@ -364,13 +484,28 @@ const styles = StyleSheet.create({
   assignmentBadgeA: { backgroundColor: COLORS.greenAccent },
   assignmentBadgeB: { backgroundColor: COLORS.blue },
   assignmentBadgeText: { fontSize: 12, fontWeight: '700', color: COLORS.white },
-  assignActions: { marginTop: 16, padding: 16, backgroundColor: COLORS.gold + '15', borderRadius: 12, borderWidth: 1, borderColor: COLORS.gold + '30' },
-  assignLabel: { fontSize: 13, color: COLORS.gold, fontWeight: '600', marginBottom: 12, textAlign: 'center' },
-  assignButtons: { flexDirection: 'row', gap: 12 },
-  assignBtn: { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
-  assignBtnA: { backgroundColor: COLORS.greenAccent },
-  assignBtnB: { backgroundColor: COLORS.blue },
-  assignBtnText: { fontSize: 15, fontWeight: '600', color: COLORS.white },
+
+  // Live test
+  clearEventsText: { fontSize: 13, color: COLORS.muted },
+  testEmptyCard: { alignItems: 'center', paddingVertical: 32, gap: 8, backgroundColor: COLORS.bgCard, borderRadius: 12, borderWidth: 1, borderColor: COLORS.muted + '20' },
+  testEmptyText: { fontSize: 15, color: COLORS.silver, fontWeight: '500' },
+  testEmptyHint: { fontSize: 12, color: COLORS.muted },
+  testEventList: { gap: 6 },
+  testEventRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.bgCard, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: COLORS.muted + '10', opacity: 0.5 },
+  testEventRowLatest: { opacity: 1, borderColor: COLORS.muted + '30' },
+  testEventDot: { width: 10, height: 10, borderRadius: 5 },
+  testEventInfo: { flex: 1 },
+  testEventTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  testEventPlayer: { fontSize: 14, fontWeight: '700' },
+  testEventTypeBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  testEventTypeText: { fontSize: 12, fontWeight: '600' },
+  testEventButton: { fontSize: 11, color: COLORS.muted, marginTop: 2 },
+
+  tipCard: { backgroundColor: COLORS.bgCard, borderRadius: 12, padding: 16, gap: 14, marginBottom: 16 },
+  tipRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  tipNumber: { width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.greenAccent + '20', color: COLORS.greenAccent, fontSize: 12, fontWeight: '700', textAlign: 'center', lineHeight: 22, overflow: 'hidden' },
+  tipText: { flex: 1, fontSize: 14, color: COLORS.silver, lineHeight: 20 },
+  tipBold: { color: COLORS.white, fontWeight: '600' },
   helpText: { fontSize: 13, color: COLORS.muted, textAlign: 'center' },
   bottomPadding: { height: 40 },
 });

@@ -3,13 +3,19 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "postinstall": "patch-package",
+    "postinstall": "npx patch-package",
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
+    "dev": "expo run:android",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:apk": "bash build-apk.sh",
+    "build:eas": "eas build --platform android --profile preview",
+    "build:eas:ios": "eas build --platform ios --profile preview",
+    "prebuild": "expo prebuild",
+    "clean": "rm -rf node_modules && npm install --legacy-peer-deps",
+    "reset-project": "node ./scripts/reset-project.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

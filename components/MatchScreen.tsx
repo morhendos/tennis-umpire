@@ -1,11 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   useWindowDimensions,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +32,7 @@ interface MatchScreenProps {
   audioEnabled: boolean;
   toggleAudio: () => void;
   onResetMatch: () => void;
+  flicActive?: boolean;
 }
 
 export function MatchScreen({
@@ -34,7 +43,14 @@ export function MatchScreen({
   audioEnabled,
   toggleAudio,
   onResetMatch,
+  flicActive = false,
 }: MatchScreenProps) {
+  const [showManualButtons, setShowManualButtons] = useState(false);
+
+  const toggleManualButtons = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setShowManualButtons(prev => !prev);
+  };
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -55,8 +71,12 @@ export function MatchScreen({
           paddingRight: insets.right + 16,
         }]}>
           <View style={styles.landscapeMain}>
-            {/* Left: Player A Score Button */}
-            {!match.isComplete ? (
+            {/* Left: Player A Score Button (no flic only) */}
+            {match.isComplete ? (
+              <View style={styles.landscapeWinnerSide}>
+                {match.winner === 'A' && <Text style={styles.landscapeTrophy}>🏆</Text>}
+              </View>
+            ) : !flicActive ? (
               <TouchableOpacity
                 style={styles.landscapeScoreBtn}
                 onPress={() => scorePoint('A')}
@@ -71,11 +91,7 @@ export function MatchScreen({
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
-            ) : (
-              <View style={styles.landscapeWinnerSide}>
-                {match.winner === 'A' && <Text style={styles.landscapeTrophy}>🏆</Text>}
-              </View>
-            )}
+            ) : null}
 
             {/* Center: TV-Style Scoreboard */}
             <View style={styles.landscapeScoreboard}>
@@ -210,6 +226,14 @@ export function MatchScreen({
                   >
                     <Ionicons name="arrow-undo" size={16} color={canUndo ? COLORS.silver : COLORS.muted} />
                   </TouchableOpacity>
+                  {flicActive && !match.isComplete && (
+                    <TouchableOpacity
+                      style={[styles.lsbControlBtn, showManualButtons && styles.lsbControlBtnActive]}
+                      onPress={toggleManualButtons}
+                    >
+                      <Ionicons name="hand-left-outline" size={16} color={showManualButtons ? COLORS.gold : COLORS.silver} />
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     style={styles.lsbControlBtn}
                     onPress={toggleAudio}
@@ -230,8 +254,12 @@ export function MatchScreen({
               </LinearGradient>
             </View>
 
-            {/* Right: Player B Score Button */}
-            {!match.isComplete ? (
+            {/* Right: Player B Score Button (no flic) OR Manual Panel (flic) */}
+            {match.isComplete ? (
+              <View style={styles.landscapeWinnerSide}>
+                {match.winner === 'B' && <Text style={styles.landscapeTrophy}>🏆</Text>}
+              </View>
+            ) : !flicActive ? (
               <TouchableOpacity
                 style={styles.landscapeScoreBtn}
                 onPress={() => scorePoint('B')}
@@ -246,11 +274,61 @@ export function MatchScreen({
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
-            ) : (
-              <View style={styles.landscapeWinnerSide}>
-                {match.winner === 'B' && <Text style={styles.landscapeTrophy}>🏆</Text>}
+            ) : flicActive && showManualButtons ? (
+              /* Compact landscape manual panel */
+              <View style={styles.lsManualPanel}>
+                {/* Player A */}
+                <View style={styles.lsmpRow}>
+                  <View style={[styles.lsmpDot, { backgroundColor: COLORS.greenAccent }]} />
+                  <Text style={styles.lsmpName} numberOfLines={1}>{match.players.A.name}</Text>
+                  <TouchableOpacity
+                    style={styles.lsmpAddBtn}
+                    onPress={() => scorePoint('A')}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={[COLORS.green, COLORS.greenLight]}
+                      style={styles.lsmpAddGradient}
+                    >
+                      <Ionicons name="add" size={18} color={COLORS.white} />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.lsmpDivider} />
+
+                {/* Player B */}
+                <View style={styles.lsmpRow}>
+                  <View style={[styles.lsmpDot, { backgroundColor: COLORS.gold }]} />
+                  <Text style={styles.lsmpName} numberOfLines={1}>{match.players.B.name}</Text>
+                  <TouchableOpacity
+                    style={styles.lsmpAddBtn}
+                    onPress={() => scorePoint('B')}
+                    activeOpacity={0.7}
+                  >
+                    <LinearGradient
+                      colors={[COLORS.goldMuted, COLORS.gold]}
+                      style={styles.lsmpAddGradient}
+                    >
+                      <Ionicons name="add" size={18} color={COLORS.bgPrimary} />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.lsmpDivider} />
+
+                {/* Undo */}
+                <TouchableOpacity
+                  style={[styles.lsmpUndoBtn, !canUndo && { opacity: 0.4 }]}
+                  onPress={undo}
+                  disabled={!canUndo}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="arrow-undo" size={14} color={canUndo ? COLORS.silver : COLORS.muted} />
+                  <Text style={[styles.lsmpUndoText, !canUndo && { color: COLORS.muted }]}>Undo</Text>
+                </TouchableOpacity>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
       </ScreenWrapper>
@@ -394,8 +472,100 @@ export function MatchScreen({
           </LinearGradient>
         </View>
 
-        {/* Score Buttons */}
-        {!match.isComplete ? (
+        {/* Score Area */}
+        {match.isComplete ? (
+          <View style={styles.winnerArea}>
+            <Text style={styles.trophyEmoji}>🏆</Text>
+            <Text style={styles.winnerText}>CHAMPION</Text>
+            <Text style={styles.winnerName}>{match.players[match.winner!].name}</Text>
+          </View>
+        ) : flicActive && !showManualButtons ? (
+          /* Flic display mode — scoreboard-focused, manual hidden */
+          <View style={styles.flicModeArea}>
+            <View style={styles.flicModeIndicator}>
+              <View style={styles.flicModeDots}>
+                <View style={[styles.flicModeDot, { backgroundColor: COLORS.greenAccent }]} />
+                <View style={[styles.flicModeDot, { backgroundColor: COLORS.gold }]} />
+              </View>
+              <Text style={styles.flicModeText}>Scoring via Flic</Text>
+            </View>
+            <TouchableOpacity style={styles.manualToggle} onPress={toggleManualButtons} activeOpacity={0.7}>
+              <Ionicons name="hand-left-outline" size={14} color={COLORS.muted} />
+              <Text style={styles.manualToggleText}>Manual scoring</Text>
+              <Ionicons name="chevron-down" size={14} color={COLORS.muted} />
+            </TouchableOpacity>
+          </View>
+        ) : flicActive && showManualButtons ? (
+          /* Compact manual scoring panel — flic mode with manual override */
+          <View style={styles.manualPanelArea}>
+            <TouchableOpacity style={styles.manualToggleCollapse} onPress={toggleManualButtons} activeOpacity={0.7}>
+              <Ionicons name="hand-left-outline" size={14} color={COLORS.muted} />
+              <Text style={styles.manualToggleText}>Hide manual scoring</Text>
+              <Ionicons name="chevron-up" size={14} color={COLORS.muted} />
+            </TouchableOpacity>
+
+            <View style={styles.manualPanel}>
+              {/* Player A row */}
+              <View style={styles.mpRow}>
+                <View style={styles.mpPlayerInfo}>
+                  <View style={[styles.mpDot, { backgroundColor: COLORS.greenAccent }]} />
+                  <Text style={styles.mpPlayerName} numberOfLines={1}>{match.players.A.name}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.mpAddBtn}
+                  onPress={() => scorePoint('A')}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={[COLORS.green, COLORS.greenLight]}
+                    style={styles.mpAddBtnGradient}
+                  >
+                    <Ionicons name="add" size={20} color={COLORS.white} />
+                    <Text style={styles.mpAddBtnText}>Point</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.mpDivider} />
+
+              {/* Player B row */}
+              <View style={styles.mpRow}>
+                <View style={styles.mpPlayerInfo}>
+                  <View style={[styles.mpDot, { backgroundColor: COLORS.gold }]} />
+                  <Text style={styles.mpPlayerName} numberOfLines={1}>{match.players.B.name}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.mpAddBtn}
+                  onPress={() => scorePoint('B')}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={[COLORS.goldMuted, COLORS.gold]}
+                    style={styles.mpAddBtnGradient}
+                  >
+                    <Ionicons name="add" size={20} color={COLORS.bgPrimary} />
+                    <Text style={[styles.mpAddBtnText, { color: COLORS.bgPrimary }]}>Point</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+
+              {/* Undo */}
+              <View style={styles.mpUndoRow}>
+                <TouchableOpacity
+                  style={[styles.mpUndoBtn, !canUndo && styles.mpUndoBtnDisabled]}
+                  onPress={undo}
+                  disabled={!canUndo}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="arrow-undo" size={16} color={canUndo ? COLORS.silver : COLORS.muted} />
+                  <Text style={[styles.mpUndoText, !canUndo && { color: COLORS.muted }]}>Undo last point</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        ) : (
+          /* Standard score buttons — no flic connected */
           <View style={styles.btnArea}>
             <TouchableOpacity
               style={styles.scoreBtn}
@@ -432,12 +602,6 @@ export function MatchScreen({
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.winnerArea}>
-            <Text style={styles.trophyEmoji}>🏆</Text>
-            <Text style={styles.winnerText}>CHAMPION</Text>
-            <Text style={styles.winnerName}>{match.players[match.winner!].name}</Text>
           </View>
         )}
 
@@ -640,7 +804,137 @@ const styles = StyleSheet.create({
     color: COLORS.silver,
   },
 
-  // Score buttons
+  // Flic display mode
+  flicModeArea: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 24,
+  },
+  flicModeIndicator: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  flicModeDots: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  flicModeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  flicModeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.muted,
+    letterSpacing: 1,
+  },
+  manualToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: COLORS.bgCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.muted + '20',
+  },
+  manualToggleCollapse: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+  },
+  manualToggleText: {
+    fontSize: 12,
+    color: COLORS.muted,
+    fontWeight: '500',
+  },
+
+  // Manual scoring panel (flic mode)
+  manualPanelArea: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  manualPanel: {
+    backgroundColor: COLORS.bgCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.muted + '15',
+    padding: 16,
+    gap: 12,
+  },
+  mpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mpPlayerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10,
+    marginRight: 12,
+  },
+  mpDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  mpPlayerName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: COLORS.white,
+    flex: 1,
+  },
+  mpAddBtn: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  mpAddBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 4,
+  },
+  mpAddBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  mpDivider: {
+    height: 1,
+    backgroundColor: COLORS.muted + '15',
+  },
+  mpUndoRow: {
+    alignItems: 'center',
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.muted + '15',
+  },
+  mpUndoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  mpUndoBtnDisabled: {
+    opacity: 0.4,
+  },
+  mpUndoText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: COLORS.silver,
+  },
+
+  // Score buttons (standard, no flic)
   btnArea: {
     flex: 1,
     flexDirection: 'row',
@@ -923,5 +1217,63 @@ const styles = StyleSheet.create({
   },
   lsbControlBtnDisabled: {
     opacity: 0.4,
+  },
+  lsbControlBtnActive: {
+    borderColor: COLORS.gold + '50',
+    backgroundColor: COLORS.gold + '15',
+  },
+
+  // Landscape manual panel (flic mode)
+  lsManualPanel: {
+    width: 160,
+    backgroundColor: COLORS.bgCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.muted + '15',
+    padding: 12,
+    justifyContent: 'center',
+    gap: 8,
+  },
+  lsmpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  lsmpDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  lsmpName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+  lsmpAddBtn: {
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  lsmpAddGradient: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lsmpDivider: {
+    height: 1,
+    backgroundColor: COLORS.muted + '15',
+  },
+  lsmpUndoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  lsmpUndoText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.silver,
   },
 });

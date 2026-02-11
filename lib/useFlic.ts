@@ -23,6 +23,7 @@ interface UseFlicReturn {
   stopScan: () => void;
   assignButton: (buttonId: string, player: 'A' | 'B') => void;
   clearAssignment: (player: 'A' | 'B') => void;
+  swapAssignments: () => void;
   forgetButton: (buttonId: string) => void;
   connectButton: (buttonId: string) => Promise<boolean>;
   refreshButtons: () => Promise<void>;
@@ -45,6 +46,7 @@ export function useFlic(options: UseFlicOptions = {}): UseFlicReturn {
   });
 
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const continuousScanRef = useRef(false);
 
   // Use refs for callbacks to avoid stale closures
   const onScorePointRef = useRef(onScorePoint);
@@ -170,18 +172,21 @@ export function useFlic(options: UseFlicOptions = {}): UseFlicReturn {
   }, [isInitialized, handleButtonEvent]);
 
   /**
-   * Start scanning for buttons
+   * Start scanning for buttons (continuous mode - auto-restarts after each button found)
    */
   const startScan = useCallback(async () => {
+    continuousScanRef.current = true;
     setIsScanning(true);
     try {
       await flicService.startScan();
       // Refresh button list periodically during scan
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = setInterval(async () => {
         await refreshButtons();
       }, 2000);
     } catch (error) {
       console.error('[useFlic] Scan error:', error);
+      continuousScanRef.current = false;
       setIsScanning(false);
     }
   }, [refreshButtons]);
@@ -190,6 +195,7 @@ export function useFlic(options: UseFlicOptions = {}): UseFlicReturn {
    * Stop scanning
    */
   const stopScan = useCallback(() => {
+    continuousScanRef.current = false;
     flicService.stopScan();
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current);
@@ -199,6 +205,81 @@ export function useFlic(options: UseFlicOptions = {}): UseFlicReturn {
     // Refresh buttons one more time
     refreshButtons();
   }, [refreshButtons]);
+
+  /**
+   * Auto-assign a newly paired button to the first open slot
+   */
+  const autoAssignButton = useCallback((buttonId: string) => {
+    const current = flicService.getAssignments();
+    if (!current.playerA) {
+      console.log('[useFlic] Auto-assigning new button to Player A');
+      flicService.assignButton(buttonId, 'A');
+    } else if (!current.playerB) {
+      console.log('[useFlic] Auto-assigning new button to Player B');
+      flicService.assignButton(buttonId, 'B');
+    } else {
+      console.log('[useFlic] Both slots full, skipping auto-assign');
+      return;
+    }
+    const newAssignments = flicService.getAssignments();
+    setAssignments(newAssignments);
+    saveAssignments(newAssignments);
+  }, [saveAssignments]);
+
+  /**
+   * Listen for scan completion — auto-assign + auto-restart if in continuous mode
+   */
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const unsubscribe = flicService.onScanComplete(async (button) => {
+      // Refresh the button list with the new button
+      await refreshButtons();
+
+      // Auto-assign to first open slot
+      if (button?.uuid) {
+        autoAssignButton(button.uuid);
+      }
+
+      if (continuousScanRef.current) {
+        // Check if both slots are now full — stop scanning
+        const current = flicService.getAssignments();
+        if (current.playerA && current.playerB) {
+          console.log('[useFlic] Both players assigned, stopping scan');
+          continuousScanRef.current = false;
+          setIsScanning(false);
+          if (scanIntervalRef.current) {
+            clearInterval(scanIntervalRef.current);
+            scanIntervalRef.current = null;
+          }
+          return;
+        }
+
+        // Brief pause then restart scan for next button
+        console.log('[useFlic] Button found, restarting scan for more...');
+        setTimeout(async () => {
+          if (continuousScanRef.current) {
+            try {
+              await flicService.startScan();
+              console.log('[useFlic] Scan restarted');
+            } catch (e) {
+              console.error('[useFlic] Scan restart failed:', e);
+              continuousScanRef.current = false;
+              setIsScanning(false);
+            }
+          }
+        }, 1500);
+      } else {
+        setIsScanning(false);
+        if (scanIntervalRef.current) {
+          clearInterval(scanIntervalRef.current);
+          scanIntervalRef.current = null;
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [isInitialized, refreshButtons, autoAssignButton]);
 
   /**
    * Assign button to player
@@ -215,6 +296,27 @@ export function useFlic(options: UseFlicOptions = {}): UseFlicReturn {
    */
   const clearAssignment = useCallback((player: 'A' | 'B') => {
     flicService.clearAssignment(player);
+    const newAssignments = flicService.getAssignments();
+    setAssignments(newAssignments);
+    saveAssignments(newAssignments);
+  }, [saveAssignments]);
+
+  /**
+   * Swap A/B assignments
+   */
+  const swapAssignments = useCallback(() => {
+    const current = flicService.getAssignments();
+    const oldA = current.playerA;
+    const oldB = current.playerB;
+
+    // Clear both first
+    flicService.clearAssignment('A');
+    flicService.clearAssignment('B');
+
+    // Reassign swapped
+    if (oldB) flicService.assignButton(oldB, 'A');
+    if (oldA) flicService.assignButton(oldA, 'B');
+
     const newAssignments = flicService.getAssignments();
     setAssignments(newAssignments);
     saveAssignments(newAssignments);
@@ -260,6 +362,7 @@ export function useFlic(options: UseFlicOptions = {}): UseFlicReturn {
     stopScan,
     assignButton,
     clearAssignment,
+    swapAssignments,
     forgetButton,
     connectButton,
     refreshButtons,

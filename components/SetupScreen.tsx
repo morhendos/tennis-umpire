@@ -20,6 +20,15 @@ import { COLORS } from '@/constants/colors';
 import { IconButton } from '@/components/ui';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { FORMAT_OPTIONS } from '@/lib/matchUtils';
+import { FlicStatusStrip } from '@/components/FlicStatusStrip';
+import { FlicButton, ButtonAssignments } from '@/lib/flic';
+
+interface FlicState {
+  isInitialized: boolean;
+  buttons: FlicButton[];
+  assignments: ButtonAssignments;
+  swapAssignments: () => void;
+}
 
 interface SetupScreenProps {
   step: 'players' | 'format';
@@ -32,6 +41,7 @@ interface SetupScreenProps {
   onNextStep: () => void;
   onBackStep: () => void;
   onBeginMatch: () => void;
+  flicState?: FlicState;
 }
 
 export function SetupScreen({
@@ -45,6 +55,7 @@ export function SetupScreen({
   onNextStep,
   onBackStep,
   onBeginMatch,
+  flicState,
 }: SetupScreenProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -71,7 +82,7 @@ export function SetupScreen({
           <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
             <View style={styles.topBarSpacer} />
             <IconButton 
-              icon="settings-outline" 
+              icon="volume-high-outline" 
               onPress={() => router.push('/settings')} 
             />
           </View>
@@ -151,6 +162,20 @@ export function SetupScreen({
                   </View>
                 </View>
               </View>
+
+              {/* Flic Button Status */}
+              {flicState && (
+                <View style={styles.flicStripContainer}>
+                  <FlicStatusStrip
+                    isInitialized={flicState.isInitialized}
+                    buttons={flicState.buttons}
+                    assignments={flicState.assignments}
+                    onSwap={flicState.swapAssignments}
+                    playerAName={playerAName}
+                    playerBName={playerBName}
+                  />
+                </View>
+              )}
 
               {/* Next Button */}
               <TouchableOpacity
@@ -408,6 +433,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.muted,
     letterSpacing: 1,
+  },
+
+  // Flic strip
+  flicStripContainer: {
+    width: '100%',
+    maxWidth: 360,
+    marginBottom: 32,
   },
 
   // Start button

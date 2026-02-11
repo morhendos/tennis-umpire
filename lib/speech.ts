@@ -15,9 +15,18 @@ let currentSound: Audio.Sound | null = null;
 // Timer for delayed announcements
 let serveTimer: NodeJS.Timeout | null = null;
 
+// Timer for releasing audio focus after announcement
+let releaseAudioTimer: NodeJS.Timeout | null = null;
+
+// Whether we're currently in a break (changeover/set break)
+let inBreakMode = false;
+
 // Debounce timer for rapid scoring
 let speakDebounceTimer: NodeJS.Timeout | null = null;
 const DEBOUNCE_MS = 300; // Wait 300ms before speaking
+
+// Delay before releasing audio focus after announcement finishes
+const RELEASE_FOCUS_DELAY_MS = 2000;
 
 // Cache for available voices
 let cachedVoices: Speech.Voice[] | null = null;
@@ -111,7 +120,7 @@ async function initAudio() {
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
       playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
+      staysActiveInBackground: true,
       shouldDuckAndroid: true,
     });
     console.log('✅ Audio initialized');
@@ -124,6 +133,59 @@ async function initAudio() {
 }
 initAudio();
 
+// ============================================
+// Audio Focus Management
+// ============================================
+// Release audio focus so background music (Spotify etc.) resumes at full volume.
+// Called after changeover/set break announcements finish.
+async function releaseAudioFocus() {
+  try {
+    console.log('🎵 Releasing audio focus — background music can resume');
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: false, // Deactivates iOS audio session
+      staysActiveInBackground: false,
+      shouldDuckAndroid: false,
+    });
+  } catch (e) {
+    console.error('⚠️ Failed to release audio focus:', e);
+  }
+}
+
+// Reclaim audio focus before playing announcements.
+// Background music will duck (lower volume) while we speak.
+async function claimAudioFocus() {
+  try {
+    if (releaseAudioTimer) {
+      clearTimeout(releaseAudioTimer);
+      releaseAudioTimer = null;
+    }
+    console.log('🎤 Claiming audio focus — background music will duck');
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      shouldDuckAndroid: true,
+    });
+  } catch (e) {
+    console.error('⚠️ Failed to claim audio focus:', e);
+  }
+}
+
+// Schedule releasing audio focus after a short delay
+// (gives the announcement time to fully finish before handing back to Spotify)
+function scheduleAudioFocusRelease() {
+  if (releaseAudioTimer) {
+    clearTimeout(releaseAudioTimer);
+  }
+  releaseAudioTimer = setTimeout(() => {
+    releaseAudioTimer = null;
+    if (inBreakMode) {
+      releaseAudioFocus();
+    }
+  }, RELEASE_FOCUS_DELAY_MS);
+}
+
 // Helper to pick random item from array
 function randomPick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -134,12 +196,32 @@ function getLang(): LanguageCode {
   return useVoiceStore.getState().language as LanguageCode;
 }
 
-// Cancel any pending serve announcement
+// Cancel any pending serve announcement and exit break mode
 export function cancelServeTimer() {
   if (serveTimer) {
     clearTimeout(serveTimer);
     serveTimer = null;
   }
+  if (releaseAudioTimer) {
+    clearTimeout(releaseAudioTimer);
+    releaseAudioTimer = null;
+  }
+  if (inBreakMode) {
+    inBreakMode = false;
+    claimAudioFocus();
+  }
+}
+
+// Enter break mode — after the current announcement finishes playing,
+// release audio focus so background music resumes at full volume.
+function enterBreakMode() {
+  inBreakMode = true;
+  onPlaybackFinished = () => {
+    if (inBreakMode) {
+      console.log('🎵 Break mode: announcement finished, releasing audio focus in 1s...');
+      scheduleAudioFocusRelease();
+    }
+  };
 }
 
 // Find best native voice for a language
@@ -205,6 +287,14 @@ export async function speak(text: string, style: AnnouncementStyle = 'score'): P
     speakDebounceTimer = null;
   }
   
+  // Always reclaim audio focus before speaking
+  // (this ducks Spotify/background music and exits break mode if active)
+  if (inBreakMode) {
+    console.log('🎵 Exiting break mode — reclaiming audio focus');
+    inBreakMode = false;
+  }
+  await claimAudioFocus();
+  
   // Stop current audio immediately
   await stopCurrentAudio();
   Speech.stop();
@@ -222,6 +312,9 @@ export async function speak(text: string, style: AnnouncementStyle = 'score'): P
     await speakInternal(text, style);
   }
 }
+
+// Callback to run after current announcement finishes playing
+let onPlaybackFinished: (() => void) | null = null;
 
 // Internal speak function - does the actual TTS work
 async function speakInternal(text: string, style: AnnouncementStyle): Promise<void> {
@@ -362,6 +455,12 @@ async function speakWithGoogle(text: string, settings: any, apiKey: string, isSS
       if (currentSound === sound) {
         currentSound = null;
       }
+      // Trigger post-playback callback (e.g. release audio focus for break)
+      if (onPlaybackFinished) {
+        const cb = onPlaybackFinished;
+        onPlaybackFinished = null;
+        cb();
+      }
     }
   });
 }
@@ -424,6 +523,12 @@ async function speakWithElevenLabs(text: string, settings: any, apiKey: string):
       if (currentSound === sound) {
         currentSound = null;
       }
+      // Trigger post-playback callback (e.g. release audio focus for break)
+      if (onPlaybackFinished) {
+        const cb = onPlaybackFinished;
+        onPlaybackFinished = null;
+        cb();
+      }
     }
   });
 }
@@ -465,7 +570,16 @@ async function speakNative(text: string): Promise<void> {
     console.log(`🗣️ Speaking with language fallback: ${options.language}`);
   }
   
-  Speech.speak(text, options);
+  Speech.speak(text, {
+    ...options,
+    onDone: () => {
+      if (onPlaybackFinished) {
+        const cb = onPlaybackFinished;
+        onPlaybackFinished = null;
+        cb();
+      }
+    },
+  });
 }
 
 // Stop speech and cancel any pending announcements
@@ -500,14 +614,19 @@ function pointToWord(point: number | string): string {
 
 // Schedule "Time. X to serve" announcement after break
 function scheduleServeAnnouncement(serverName: string, delaySeconds: number) {
-  cancelServeTimer();
+  // Only cancel existing timer, don't exit break mode
+  if (serveTimer) {
+    clearTimeout(serveTimer);
+    serveTimer = null;
+  }
   const lang = getLang();
   
   console.log(`⏱️ Scheduling serve announcement in ${delaySeconds} seconds`);
   
   serveTimer = setTimeout(() => {
-    speak(`${t('time', lang)}... ${serverName} ${t('toServe', lang)}`, 'calm');
     serveTimer = null;
+    // speak() will automatically reclaim audio focus and exit break mode
+    speak(`${t('time', lang)}... ${serverName} ${t('toServe', lang)}`, 'calm');
   }, delaySeconds * 1000);
 }
 
@@ -609,6 +728,7 @@ export function announceGameWon(winner: 'A' | 'B', state: MatchState) {
     } else {
       announcement += `... ${changeoverPhrase}, 90 ${t('seconds', lang)}`;
       speak(announcement, 'game');
+      enterBreakMode(); // Release audio focus after announcement → Spotify resumes
       scheduleServeAnnouncement(nextServerName, 90);
       return;
     }
@@ -649,6 +769,7 @@ export function announceSetWon(
   announcement += `... ${breakPhrase}`;
   
   speak(announcement, 'set');
+  enterBreakMode(); // Release audio focus after announcement → Spotify resumes
   scheduleServeAnnouncement(nextServerName, 120);
 }
 

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   Animated,
   Image,
   ScrollView,
@@ -19,6 +18,7 @@ import { MatchFormatType, FORMAT_NAMES } from '@/lib/scoring';
 import { useColors } from '@/constants/colors';
 import { IconButton } from '@/components/ui';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
+import { PlayerNameInput } from '@/components/PlayerNameInput';
 import { FORMAT_OPTIONS } from '@/lib/matchUtils';
 import { FlicStatusStrip } from '@/components/FlicStatusStrip';
 import { FlicButton, ButtonAssignments } from '@/lib/flic';
@@ -110,7 +110,7 @@ export function SetupScreen({
 
               {/* Input Fields */}
               <View style={styles.inputArea}>
-                <View style={styles.inputRow}>
+                <View style={[styles.inputRow, { zIndex: 20 }]}>
                   <View style={styles.inputBorder}>
                     <LinearGradient
                       colors={[c.greenAccent, c.green]}
@@ -119,14 +119,12 @@ export function SetupScreen({
                       end={{ x: 1, y: 1 }}
                     >
                       <View style={[styles.inputInner, { backgroundColor: c.bgCard }]}>
-                        <Text style={[styles.inputLabel, { color: c.muted }]}>PLAYER 1</Text>
-                        <TextInput
-                          style={[styles.textInput, { color: c.white }]}
-                          placeholder="Enter name"
-                          placeholderTextColor={c.muted}
+                        <PlayerNameInput
                           value={playerAName}
                           onChangeText={onPlayerANameChange}
-                          autoCapitalize="words"
+                          label="PLAYER 1"
+                          colors={c}
+                          excludeName={playerBName}
                         />
                       </View>
                     </LinearGradient>
@@ -141,7 +139,7 @@ export function SetupScreen({
                   <View style={[styles.vsLineRight, { backgroundColor: c.muted + '30' }]} />
                 </View>
 
-                <View style={styles.inputRow}>
+                <View style={[styles.inputRow, { zIndex: 10 }]}>
                   <View style={styles.inputBorder}>
                     <LinearGradient
                       colors={[c.gold, c.goldMuted]}
@@ -150,14 +148,12 @@ export function SetupScreen({
                       end={{ x: 1, y: 1 }}
                     >
                       <View style={[styles.inputInner, { backgroundColor: c.bgCard }]}>
-                        <Text style={[styles.inputLabel, { color: c.muted }]}>PLAYER 2</Text>
-                        <TextInput
-                          style={[styles.textInput, { color: c.white }]}
-                          placeholder="Enter name"
-                          placeholderTextColor={c.muted}
+                        <PlayerNameInput
                           value={playerBName}
                           onChangeText={onPlayerBNameChange}
-                          autoCapitalize="words"
+                          label="PLAYER 2"
+                          colors={c}
+                          excludeName={playerAName}
                         />
                       </View>
                     </LinearGradient>
@@ -377,7 +373,6 @@ const styles = StyleSheet.create({
   },
   inputBorder: {
     borderRadius: 16,
-    overflow: 'hidden',
   },
   inputGradientBorder: {
     padding: 2,

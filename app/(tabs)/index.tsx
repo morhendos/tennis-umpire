@@ -5,6 +5,7 @@ import { useMatch } from '@/lib/useMatch';
 import { useFlic } from '@/lib/useFlic';
 import { announceFullScore } from '@/lib/speech';
 import { MatchFormatType } from '@/lib/scoring';
+import { usePlayerStore } from '@/lib/playerStore';
 import { useColors } from '@/constants/colors';
 import { CoinFlip } from '@/components/CoinFlip';
 import { SetupScreen } from '@/components/SetupScreen';
@@ -55,8 +56,13 @@ export default function ScoreboardScreen() {
     setSetupStep('players');
   };
 
+  const { addName } = usePlayerStore();
+
   const handleCoinFlipComplete = (server: 'A' | 'B') => {
     setShowCoinFlip(false);
+    // Save names to history for quick selection next time
+    addName(playerAName.trim());
+    addName(playerBName.trim());
     startMatch(playerAName.trim(), playerBName.trim(), server, selectedFormat);
   };
 

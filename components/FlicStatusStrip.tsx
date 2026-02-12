@@ -8,19 +8,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { COLORS } from '@/constants/colors';
+import { useColors } from '@/constants/colors';
 import { flicService, FlicButton, FlicEvent, ButtonAssignments } from '@/lib/flic';
 
 interface FlicStatusStripProps {
-  /** Current assignments from useFlic hook */
   assignments: ButtonAssignments;
-  /** All known buttons */
   buttons: FlicButton[];
-  /** Whether the flic service is initialized */
   isInitialized: boolean;
-  /** Swap the A/B assignments */
   onSwap: () => void;
-  /** Player names for display */
   playerAName?: string;
   playerBName?: string;
 }
@@ -34,6 +29,7 @@ export function FlicStatusStrip({
   playerBName,
 }: FlicStatusStripProps) {
   const router = useRouter();
+  const c = useColors();
   const [lastPressed, setLastPressed] = useState<'A' | 'B' | null>(null);
   const pulseA = useRef(new Animated.Value(0)).current;
   const pulseB = useRef(new Animated.Value(0)).current;
@@ -49,12 +45,9 @@ export function FlicStatusStrip({
   const hasBothAssigned = !!assignments.playerA && !!assignments.playerB;
   const hasAnyButtons = buttons.length > 0;
 
-  // Animate pulse on the correct side
   const triggerPulse = useCallback((player: 'A' | 'B') => {
     const anim = player === 'A' ? pulseA : pulseB;
     setLastPressed(player);
-
-    // Clear previous timeout
     if (clearTimeoutRef.current) clearTimeout(clearTimeoutRef.current);
 
     Animated.sequence([
@@ -64,11 +57,9 @@ export function FlicStatusStrip({
       Animated.timing(anim, { toValue: 0, duration: 800, useNativeDriver: false }),
     ]).start();
 
-    // Clear the "last pressed" indicator after a few seconds
     clearTimeoutRef.current = setTimeout(() => setLastPressed(null), 3000);
   }, [pulseA, pulseB]);
 
-  // Listen for button presses to identify buttons
   useEffect(() => {
     if (!isInitialized) return;
 
@@ -85,10 +76,8 @@ export function FlicStatusStrip({
     };
   }, [isInitialized, triggerPulse]);
 
-  // Not initialized yet — show nothing
   if (!isInitialized) return null;
 
-  // No buttons paired at all — show setup prompt
   if (!hasAnyButtons) {
     return (
       <TouchableOpacity 
@@ -96,23 +85,22 @@ export function FlicStatusStrip({
         onPress={() => router.push('/flic-setup')}
         activeOpacity={0.7}
       >
-        <View style={styles.setupPrompt}>
-          <Ionicons name="bluetooth-outline" size={18} color={COLORS.muted} />
-          <Text style={styles.setupPromptText}>Set up Flic buttons</Text>
-          <Ionicons name="chevron-forward" size={16} color={COLORS.muted} />
+        <View style={[styles.setupPrompt, { backgroundColor: c.bgCard, borderColor: c.muted + '20' }]}>
+          <Ionicons name="bluetooth-outline" size={18} color={c.muted} />
+          <Text style={[styles.setupPromptText, { color: c.muted }]}>Set up Flic buttons</Text>
+          <Ionicons name="chevron-forward" size={16} color={c.muted} />
         </View>
       </TouchableOpacity>
     );
   }
 
-  // Has buttons — show status with test capability
   const pulseABg = pulseA.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.bgCard, COLORS.greenAccent + '60'],
+    outputRange: [c.bgCard, c.greenAccent + '60'],
   });
   const pulseBBg = pulseB.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.bgCard, COLORS.gold + '60'],
+    outputRange: [c.bgCard, c.gold + '60'],
   });
 
   return (
@@ -120,14 +108,14 @@ export function FlicStatusStrip({
       {/* Header row */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Ionicons name="bluetooth" size={14} color={COLORS.greenAccent} />
-          <Text style={styles.headerLabel}>FLIC BUTTONS</Text>
+          <Ionicons name="bluetooth" size={14} color={c.greenAccent} />
+          <Text style={[styles.headerLabel, { color: c.muted }]}>FLIC BUTTONS</Text>
         </View>
         <View style={styles.headerRight}>
           {hasBothAssigned && (
-            <TouchableOpacity style={styles.swapBtn} onPress={onSwap} activeOpacity={0.7}>
-              <Ionicons name="swap-horizontal" size={16} color={COLORS.gold} />
-              <Text style={styles.swapText}>Swap</Text>
+            <TouchableOpacity style={[styles.swapBtn, { backgroundColor: c.gold + '15' }]} onPress={onSwap} activeOpacity={0.7}>
+              <Ionicons name="swap-horizontal" size={16} color={c.gold} />
+              <Text style={[styles.swapText, { color: c.gold }]}>Swap</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity 
@@ -135,17 +123,17 @@ export function FlicStatusStrip({
             onPress={() => router.push('/flic-setup')}
             activeOpacity={0.7}
           >
-            <Ionicons name="settings-outline" size={14} color={COLORS.muted} />
+            <Ionicons name="settings-outline" size={14} color={c.muted} />
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Button status cards */}
       <View style={styles.buttonsRow}>
-        <Animated.View style={[styles.buttonSlot, { backgroundColor: pulseABg }]}>
+        <Animated.View style={[styles.buttonSlot, { backgroundColor: pulseABg, borderColor: c.muted + '20' }]}>
           <View style={styles.slotHeader}>
-            <View style={[styles.playerDot, { backgroundColor: COLORS.greenAccent }]} />
-            <Text style={styles.slotPlayer}>
+            <View style={[styles.playerDot, { backgroundColor: c.greenAccent }]} />
+            <Text style={[styles.slotPlayer, { color: c.silver }]}>
               {playerAName?.trim() || 'Player A'}
             </Text>
           </View>
@@ -153,24 +141,25 @@ export function FlicStatusStrip({
             <View style={styles.slotStatus}>
               <View style={[
                 styles.connectionDot, 
-                playerA.isConnected && styles.connectionDotActive
+                { backgroundColor: c.muted },
+                playerA.isConnected && { backgroundColor: c.greenAccent },
               ]} />
-              <Text style={styles.slotButtonName} numberOfLines={1}>
+              <Text style={[styles.slotButtonName, { color: c.muted }]} numberOfLines={1}>
                 {playerA.name}
               </Text>
               {lastPressed === 'A' && (
-                <Text style={styles.pressedBadge}>✓</Text>
+                <Text style={[styles.pressedBadge, { color: c.greenAccent }]}>✓</Text>
               )}
             </View>
           ) : (
-            <Text style={styles.slotEmpty}>Not assigned</Text>
+            <Text style={[styles.slotEmpty, { color: c.muted + '80' }]}>Not assigned</Text>
           )}
         </Animated.View>
 
-        <Animated.View style={[styles.buttonSlot, { backgroundColor: pulseBBg }]}>
+        <Animated.View style={[styles.buttonSlot, { backgroundColor: pulseBBg, borderColor: c.muted + '20' }]}>
           <View style={styles.slotHeader}>
-            <View style={[styles.playerDot, { backgroundColor: COLORS.gold }]} />
-            <Text style={styles.slotPlayer}>
+            <View style={[styles.playerDot, { backgroundColor: c.gold }]} />
+            <Text style={[styles.slotPlayer, { color: c.silver }]}>
               {playerBName?.trim() || 'Player B'}
             </Text>
           </View>
@@ -178,24 +167,24 @@ export function FlicStatusStrip({
             <View style={styles.slotStatus}>
               <View style={[
                 styles.connectionDot, 
-                playerB.isConnected && styles.connectionDotActive
+                { backgroundColor: c.muted },
+                playerB.isConnected && { backgroundColor: c.greenAccent },
               ]} />
-              <Text style={styles.slotButtonName} numberOfLines={1}>
+              <Text style={[styles.slotButtonName, { color: c.muted }]} numberOfLines={1}>
                 {playerB.name}
               </Text>
               {lastPressed === 'B' && (
-                <Text style={styles.pressedBadge}>✓</Text>
+                <Text style={[styles.pressedBadge, { color: c.greenAccent }]}>✓</Text>
               )}
             </View>
           ) : (
-            <Text style={styles.slotEmpty}>Not assigned</Text>
+            <Text style={[styles.slotEmpty, { color: c.muted + '80' }]}>Not assigned</Text>
           )}
         </Animated.View>
       </View>
 
-      {/* Hint text */}
       {hasBothAssigned && (
-        <Text style={styles.hintText}>
+        <Text style={[styles.hintText, { color: c.muted + '80' }]}>
           Press a Flic button to test which is which
         </Text>
       )}
@@ -209,25 +198,18 @@ const styles = StyleSheet.create({
     maxWidth: 360,
     alignSelf: 'center',
   },
-
-  // Setup prompt (no buttons paired)
   setupPrompt: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    backgroundColor: COLORS.bgCard,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.muted + '20',
   },
   setupPromptText: {
     fontSize: 14,
-    color: COLORS.muted,
   },
-
-  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -242,7 +224,6 @@ const styles = StyleSheet.create({
   headerLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.muted,
     letterSpacing: 2,
   },
   headerRight: {
@@ -256,30 +237,24 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 4,
     paddingHorizontal: 10,
-    backgroundColor: COLORS.gold + '15',
     borderRadius: 12,
   },
   swapText: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.gold,
   },
   setupLink: {
     padding: 4,
   },
-
-  // Button slots
   buttonsRow: {
     flexDirection: 'row',
     gap: 10,
   },
   buttonSlot: {
     flex: 1,
-    backgroundColor: COLORS.bgCard,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: COLORS.muted + '20',
   },
   slotHeader: {
     flexDirection: 'row',
@@ -295,7 +270,6 @@ const styles = StyleSheet.create({
   slotPlayer: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.silver,
     letterSpacing: 1,
   },
   slotStatus: {
@@ -307,31 +281,21 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: COLORS.muted,
-  },
-  connectionDotActive: {
-    backgroundColor: COLORS.greenAccent,
   },
   slotButtonName: {
     fontSize: 12,
-    color: COLORS.muted,
     flex: 1,
   },
   slotEmpty: {
     fontSize: 12,
-    color: COLORS.muted + '80',
     fontStyle: 'italic',
   },
   pressedBadge: {
     fontSize: 14,
-    color: COLORS.greenAccent,
     fontWeight: '700',
   },
-
-  // Hint
   hintText: {
     fontSize: 11,
-    color: COLORS.muted + '80',
     textAlign: 'center',
     marginTop: 8,
   },

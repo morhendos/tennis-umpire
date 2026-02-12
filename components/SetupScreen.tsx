@@ -16,7 +16,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MatchFormatType, FORMAT_NAMES } from '@/lib/scoring';
-import { COLORS } from '@/constants/colors';
+import { useColors } from '@/constants/colors';
 import { IconButton } from '@/components/ui';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { FORMAT_OPTIONS } from '@/lib/matchUtils';
@@ -59,6 +59,7 @@ export function SetupScreen({
 }: SetupScreenProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const c = useColors();
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -74,7 +75,7 @@ export function SetupScreen({
   // Step 1: Player Names
   if (step === 'players') {
     return (
-      <ScreenWrapper>
+      <ScreenWrapper colors={c}>
         <KeyboardAvoidingView 
           style={styles.safeContent}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -83,7 +84,8 @@ export function SetupScreen({
             <View style={styles.topBarSpacer} />
             <IconButton 
               icon="volume-high-outline" 
-              onPress={() => router.push('/settings')} 
+              onPress={() => router.push('/settings')}
+              colors={c}
             />
           </View>
 
@@ -95,15 +97,15 @@ export function SetupScreen({
             <Animated.View style={[styles.setupContent, { opacity: fadeAnim }]}>
               {/* Logo */}
               <View style={styles.logoArea}>
-                <View style={styles.logoCircle}>
+                <View style={[styles.logoCircle, { backgroundColor: c.green + '30', borderColor: c.greenAccent + '50' }]}>
                   <Image 
                     source={require('@/assets/images/ball03.png')} 
                     style={styles.logoImage}
                   />
                 </View>
-                <Text style={styles.logoText}>TENNIS</Text>
-                <View style={styles.logoLine} />
-                <Text style={styles.logoSubtext}>UMPIRE</Text>
+                <Text style={[styles.logoText, { color: c.white }]}>TENNIS</Text>
+                <View style={[styles.logoLine, { backgroundColor: c.gold }]} />
+                <Text style={[styles.logoSubtext, { color: c.gold }]}>UMPIRE</Text>
               </View>
 
               {/* Input Fields */}
@@ -111,17 +113,17 @@ export function SetupScreen({
                 <View style={styles.inputRow}>
                   <View style={styles.inputBorder}>
                     <LinearGradient
-                      colors={[COLORS.greenAccent, COLORS.green]}
+                      colors={[c.greenAccent, c.green]}
                       style={styles.inputGradientBorder}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      <View style={styles.inputInner}>
-                        <Text style={styles.inputLabel}>PLAYER 1</Text>
+                      <View style={[styles.inputInner, { backgroundColor: c.bgCard }]}>
+                        <Text style={[styles.inputLabel, { color: c.muted }]}>PLAYER 1</Text>
                         <TextInput
-                          style={styles.textInput}
+                          style={[styles.textInput, { color: c.white }]}
                           placeholder="Enter name"
-                          placeholderTextColor={COLORS.muted}
+                          placeholderTextColor={c.muted}
                           value={playerAName}
                           onChangeText={onPlayerANameChange}
                           autoCapitalize="words"
@@ -132,27 +134,27 @@ export function SetupScreen({
                 </View>
 
                 <View style={styles.vsSection}>
-                  <View style={styles.vsLineLeft} />
-                  <View style={styles.vsBadge}>
-                    <Text style={styles.vsText}>VS</Text>
+                  <View style={[styles.vsLineLeft, { backgroundColor: c.muted + '30' }]} />
+                  <View style={[styles.vsBadge, { backgroundColor: c.bgCard, borderColor: c.muted + '30' }]}>
+                    <Text style={[styles.vsText, { color: c.muted }]}>VS</Text>
                   </View>
-                  <View style={styles.vsLineRight} />
+                  <View style={[styles.vsLineRight, { backgroundColor: c.muted + '30' }]} />
                 </View>
 
                 <View style={styles.inputRow}>
                   <View style={styles.inputBorder}>
                     <LinearGradient
-                      colors={[COLORS.gold, COLORS.goldMuted]}
+                      colors={[c.gold, c.goldMuted]}
                       style={styles.inputGradientBorder}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                     >
-                      <View style={styles.inputInner}>
-                        <Text style={styles.inputLabel}>PLAYER 2</Text>
+                      <View style={[styles.inputInner, { backgroundColor: c.bgCard }]}>
+                        <Text style={[styles.inputLabel, { color: c.muted }]}>PLAYER 2</Text>
                         <TextInput
-                          style={styles.textInput}
+                          style={[styles.textInput, { color: c.white }]}
                           placeholder="Enter name"
-                          placeholderTextColor={COLORS.muted}
+                          placeholderTextColor={c.muted}
                           value={playerBName}
                           onChangeText={onPlayerBNameChange}
                           autoCapitalize="words"
@@ -185,13 +187,13 @@ export function SetupScreen({
                 activeOpacity={0.85}
               >
                 <LinearGradient
-                  colors={canProceed ? [COLORS.greenLight, COLORS.green] : [COLORS.muted, COLORS.muted]}
+                  colors={canProceed ? [c.greenLight, c.green] : [c.muted, c.muted]}
                   style={styles.startBtnGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                 >
                   <Text style={styles.startBtnText}>NEXT</Text>
-                  <Feather name="arrow-right" size={20} color={COLORS.white} />
+                  <Feather name="arrow-right" size={20} color="#ffffff" />
                 </LinearGradient>
               </TouchableOpacity>
             </Animated.View>
@@ -205,7 +207,7 @@ export function SetupScreen({
 
   // Step 2: Format Selection
   return (
-    <ScreenWrapper>
+    <ScreenWrapper colors={c}>
       <View style={[styles.safeContent, { 
         paddingTop: insets.top, 
         paddingBottom: insets.bottom,
@@ -216,7 +218,8 @@ export function SetupScreen({
         <View style={styles.topBar}>
           <IconButton 
             icon="arrow-back" 
-            onPress={onBackStep} 
+            onPress={onBackStep}
+            colors={c}
           />
           <View style={styles.topBarSpacer} />
         </View>
@@ -225,19 +228,19 @@ export function SetupScreen({
           {/* Players Summary */}
           <View style={styles.playersSummary}>
             <View style={styles.playerSummaryItem}>
-              <View style={[styles.playerDot, { backgroundColor: COLORS.greenAccent }]} />
-              <Text style={styles.playerSummaryName}>{playerAName.trim()}</Text>
+              <View style={[styles.playerDot, { backgroundColor: c.greenAccent }]} />
+              <Text style={[styles.playerSummaryName, { color: c.white }]}>{playerAName.trim()}</Text>
             </View>
-            <Text style={styles.playerSummaryVs}>vs</Text>
+            <Text style={[styles.playerSummaryVs, { color: c.muted }]}>vs</Text>
             <View style={styles.playerSummaryItem}>
-              <View style={[styles.playerDot, { backgroundColor: COLORS.gold }]} />
-              <Text style={styles.playerSummaryName}>{playerBName.trim()}</Text>
+              <View style={[styles.playerDot, { backgroundColor: c.gold }]} />
+              <Text style={[styles.playerSummaryName, { color: c.white }]}>{playerBName.trim()}</Text>
             </View>
           </View>
 
           {/* Format Title */}
-          <Text style={styles.formatStepTitle}>SELECT FORMAT</Text>
-          <Text style={styles.formatStepSubtitle}>How long should the match be?</Text>
+          <Text style={[styles.formatStepTitle, { color: c.white }]}>SELECT FORMAT</Text>
+          <Text style={[styles.formatStepSubtitle, { color: c.muted }]}>How long should the match be?</Text>
 
           {/* Format Options - Vertical List */}
           <View style={styles.formatList}>
@@ -246,7 +249,8 @@ export function SetupScreen({
                 key={format}
                 style={[
                   styles.formatListItem,
-                  selectedFormat === format && styles.formatListItemSelected,
+                  { backgroundColor: c.bgCard, borderColor: c.muted + '20' },
+                  selectedFormat === format && { backgroundColor: c.green + '30', borderColor: c.greenAccent },
                 ]}
                 onPress={() => onFormatChange(format)}
                 activeOpacity={0.7}
@@ -254,21 +258,23 @@ export function SetupScreen({
                 <View style={styles.formatListContent}>
                   <View style={[
                     styles.formatRadio,
-                    selectedFormat === format && styles.formatRadioSelected,
+                    { borderColor: c.muted },
+                    selectedFormat === format && { borderColor: c.greenAccent },
                   ]}>
-                    {selectedFormat === format && <View style={styles.formatRadioDot} />}
+                    {selectedFormat === format && <View style={[styles.formatRadioDot, { backgroundColor: c.greenAccent }]} />}
                   </View>
                   <Text
                     style={[
                       styles.formatListText,
-                      selectedFormat === format && styles.formatListTextSelected,
+                      { color: c.silver },
+                      selectedFormat === format && { color: c.white, fontWeight: '600' },
                     ]}
                   >
                     {FORMAT_NAMES[format]}
                   </Text>
                 </View>
                 {selectedFormat === format && (
-                  <Ionicons name="checkmark" size={20} color={COLORS.greenAccent} />
+                  <Ionicons name="checkmark" size={20} color={c.greenAccent} />
                 )}
               </TouchableOpacity>
             ))}
@@ -281,13 +287,13 @@ export function SetupScreen({
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={[COLORS.greenLight, COLORS.green]}
+              colors={[c.greenLight, c.green]}
               style={styles.startBtnGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
               <Text style={styles.startBtnText}>BEGIN MATCH</Text>
-              <Feather name="arrow-right" size={20} color={COLORS.white} />
+              <Feather name="arrow-right" size={20} color="#ffffff" />
             </LinearGradient>
           </TouchableOpacity>
         </View>
@@ -334,12 +340,10 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: COLORS.green + '30',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
     borderWidth: 2,
-    borderColor: COLORS.greenAccent + '50',
   },
   logoImage: {
     width: 56,
@@ -349,19 +353,16 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 48,
     fontWeight: '200',
-    color: COLORS.white,
     letterSpacing: 16,
   },
   logoLine: {
     width: 60,
     height: 2,
-    backgroundColor: COLORS.gold,
     marginVertical: 12,
   },
   logoSubtext: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.gold,
     letterSpacing: 8,
   },
 
@@ -383,21 +384,18 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   inputInner: {
-    backgroundColor: COLORS.bgCard,
     borderRadius: 14,
     padding: 16,
   },
   inputLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.muted,
     letterSpacing: 2,
     marginBottom: 8,
   },
   textInput: {
     fontSize: 20,
     fontWeight: '500',
-    color: COLORS.white,
     padding: 0,
   },
 
@@ -410,28 +408,23 @@ const styles = StyleSheet.create({
   vsLineLeft: {
     flex: 1,
     height: 1,
-    backgroundColor: COLORS.muted + '30',
   },
   vsLineRight: {
     flex: 1,
     height: 1,
-    backgroundColor: COLORS.muted + '30',
   },
   vsBadge: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.bgCard,
     justifyContent: 'center',
     alignItems: 'center',
     marginHorizontal: 16,
     borderWidth: 1,
-    borderColor: COLORS.muted + '30',
   },
   vsText: {
     fontSize: 12,
     fontWeight: '800',
-    color: COLORS.muted,
     letterSpacing: 1,
   },
 
@@ -462,7 +455,7 @@ const styles = StyleSheet.create({
   startBtnText: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.white,
+    color: '#ffffff',
     letterSpacing: 3,
   },
 
@@ -492,24 +485,20 @@ const styles = StyleSheet.create({
   playerSummaryName: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.white,
   },
   playerSummaryVs: {
     fontSize: 14,
     fontWeight: '400',
-    color: COLORS.muted,
   },
   formatStepTitle: {
     fontSize: 28,
     fontWeight: '200',
-    color: COLORS.white,
     textAlign: 'center',
     letterSpacing: 4,
     marginBottom: 8,
   },
   formatStepSubtitle: {
     fontSize: 14,
-    color: COLORS.muted,
     textAlign: 'center',
     marginBottom: 32,
   },
@@ -526,14 +515,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: COLORS.bgCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: COLORS.muted + '20',
-  },
-  formatListItemSelected: {
-    backgroundColor: COLORS.green + '30',
-    borderColor: COLORS.greenAccent,
   },
   formatListContent: {
     flexDirection: 'row',
@@ -545,26 +528,16 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: COLORS.muted,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  formatRadioSelected: {
-    borderColor: COLORS.greenAccent,
   },
   formatRadioDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: COLORS.greenAccent,
   },
   formatListText: {
     fontSize: 16,
     fontWeight: '500',
-    color: COLORS.silver,
-  },
-  formatListTextSelected: {
-    color: COLORS.white,
-    fontWeight: '600',
   },
 });

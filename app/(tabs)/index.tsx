@@ -5,7 +5,7 @@ import { useMatch } from '@/lib/useMatch';
 import { useFlic } from '@/lib/useFlic';
 import { announceFullScore } from '@/lib/speech';
 import { MatchFormatType } from '@/lib/scoring';
-import { COLORS } from '@/constants/colors';
+import { useColors } from '@/constants/colors';
 import { CoinFlip } from '@/components/CoinFlip';
 import { SetupScreen } from '@/components/SetupScreen';
 import { MatchScreen } from '@/components/MatchScreen';
@@ -13,6 +13,7 @@ import { ScreenWrapper } from '@/components/ScreenWrapper';
 
 export default function ScoreboardScreen() {
   const insets = useSafeAreaInsets();
+  const c = useColors();
   const { match, startMatch, scorePoint, undo, resetMatch, canUndo, audioEnabled, toggleAudio } = useMatch();
 
   // Connect Flic buttons to match scoring
@@ -62,7 +63,7 @@ export default function ScoreboardScreen() {
   // Coin Flip Screen
   if (showCoinFlip) {
     return (
-      <ScreenWrapper>
+      <ScreenWrapper colors={c}>
         <View style={[styles.safeContent, { 
           paddingTop: insets.top, 
           paddingBottom: insets.bottom,

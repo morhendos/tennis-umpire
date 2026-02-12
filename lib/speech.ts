@@ -924,5 +924,5 @@ export function announceFullScore(state: MatchState) {
 export function announceMatchStart(playerA: string, playerB: string, serverName?: string) {
   const lang = getLang();
   const server = serverName || playerA;
-  speak(`${playerA} ${t('versus', lang)} ${playerB}. ${server} ${t('toServe', lang)}.`, 'calm');
+  speak(`${playerA} ${t('versus', lang)} ${playerB}... ${server} ${t('toServe', lang)}.`, 'calm');
 }

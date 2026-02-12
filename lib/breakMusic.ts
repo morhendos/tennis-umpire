@@ -11,6 +11,7 @@ import { useVoiceStore } from './voiceStore';
 // Drop MP3 files into assets/music/ and register them here
 const TRACKS: { id: string; name: string; source: any }[] = [
   { id: 'billie-jean', name: 'Billie Jean', source: require('../assets/music/billie-jean.mp3') },
+  { id: 'this-girl', name: 'This Girl', source: require('../assets/music/this-girl.mp3') },
 ];
 
 let musicSound: Audio.Sound | null = null;

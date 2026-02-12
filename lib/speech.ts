@@ -809,7 +809,7 @@ export function announceScore(state: MatchState) {
 }
 
 // Announce game won
-export function announceGameWon(winner: 'A' | 'B', state: MatchState) {
+export async function announceGameWon(winner: 'A' | 'B', state: MatchState) {
   const lang = getLang();
   const { players, games, server } = state;
   const winnerName = players[winner].name;
@@ -855,8 +855,8 @@ export function announceGameWon(winner: 'A' | 'B', state: MatchState) {
       announcement += `... ${changeoverPhrase}... ${nextServerName} ${t('toServe', lang)}`;
     } else {
       announcement += `... ${changeoverPhrase}, 90 ${t('seconds', lang)}`;
-      speak(announcement, 'game');
-      enterBreakMode(); // Release audio focus after announcement → Spotify resumes
+      await speak(announcement, 'game');
+      enterBreakMode();
       scheduleServeAnnouncement(nextServerName, 90);
       return;
     }
@@ -868,7 +868,7 @@ export function announceGameWon(winner: 'A' | 'B', state: MatchState) {
 }
 
 // Announce set won
-export function announceSetWon(
+export async function announceSetWon(
   winner: 'A' | 'B',
   setScore: { A: number; B: number },
   state: MatchState
@@ -896,8 +896,8 @@ export function announceSetWon(
   const breakPhrase = randomPick(breakPhrases);
   announcement += `... ${breakPhrase}`;
   
-  speak(announcement, 'set');
-  enterBreakMode(); // Release audio focus after announcement → Spotify resumes
+  await speak(announcement, 'set');
+  enterBreakMode();
   scheduleServeAnnouncement(nextServerName, 120);
 }
 

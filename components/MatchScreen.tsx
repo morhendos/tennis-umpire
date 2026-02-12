@@ -27,6 +27,7 @@ import { useColors, AppColors } from '@/constants/colors';
 import { AnimatedScore, ServeIndicator, IconButton } from '@/components/ui';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { getStatusConfig, StatusConfig } from '@/lib/matchUtils';
+import { useBreakTimerStore, formatBreakTime } from '@/lib/breakTimerStore';
 
 interface MatchScreenProps {
   match: any;
@@ -90,6 +91,8 @@ export function MatchScreen({
   const status = getMatchStatus(match);
   const setsWon = getSetsWon(match);
   const statusConfig = getStatusConfig(status, match.players.A.name, match.players.B.name, match.tiebreak);
+  const breakSecondsLeft = useBreakTimerStore(s => s.secondsLeft);
+  const breakLabel = useBreakTimerStore(s => s.label);
 
   // ═══════════════════════════════════════════════
   // LANDSCAPE LAYOUT
@@ -132,14 +135,20 @@ export function MatchScreen({
                 colors={[c.bgCard, c.bgSecondary]}
                 style={[styles.landscapeScoreboardGradient, { borderColor: c.muted + '15' }]}
               >
-                {/* Status Banner */}
-                {statusConfig && (
+                {/* Status Banner / Break Timer */}
+                {breakSecondsLeft !== null ? (
+                  <View style={[styles.landscapeStatus, { backgroundColor: c.bgCard, borderColor: c.amber + '40' }]}>
+                    <Text style={[styles.landscapeStatusText, { color: c.amber }]}>
+                      {breakLabel}  {formatBreakTime(breakSecondsLeft)}
+                    </Text>
+                  </View>
+                ) : statusConfig ? (
                   <View style={[styles.landscapeStatus, { backgroundColor: c.bgCard, borderColor: c.muted + '20' }, statusConfig.urgent && { backgroundColor: c.red + '15', borderColor: c.red + '40' }]}>
                     <Text style={[styles.landscapeStatusText, { color: statusConfig.color }]}>
                       {statusConfig.text}
                     </Text>
                   </View>
-                )}
+                ) : null}
 
                 {/* Header Row */}
                 <View style={[styles.lsbHeader, { borderBottomColor: c.muted + '15' }]}>
@@ -377,8 +386,13 @@ export function MatchScreen({
           />
         </View>
 
-        {/* Status Banner */}
-        {statusConfig && (
+        {/* Status Banner / Break Timer */}
+        {breakSecondsLeft !== null ? (
+          <View style={[styles.statusBanner, { backgroundColor: c.bgCard, borderColor: c.amber + '40' }]}>
+            <Text style={[styles.breakTimerLabel, { color: c.amber }]}>{breakLabel}</Text>
+            <Text style={[styles.breakTimerTime, { color: c.amber }]}>{formatBreakTime(breakSecondsLeft)}</Text>
+          </View>
+        ) : statusConfig ? (
           <View style={[styles.statusBanner, { backgroundColor: c.bgCard, borderColor: c.muted + '20' }, statusConfig.urgent && { backgroundColor: c.red + '15', borderColor: c.red + '40' }]}>
             <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
             <Text style={[styles.statusLabel, { color: statusConfig.color }]}>
@@ -386,7 +400,7 @@ export function MatchScreen({
             </Text>
             <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
           </View>
-        )}
+        ) : null}
 
         {/* Main Scoreboard */}
         <Pressable style={styles.scoreboardArea} onLongPress={handleScoreboardLongPress}>
@@ -684,6 +698,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 3,
+  },
+  breakTimerLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  breakTimerTime: {
+    fontSize: 24,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'] as any,
   },
 
   // Scoreboard

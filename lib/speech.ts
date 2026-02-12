@@ -5,6 +5,7 @@ import { MatchState, getMatchStatus, MatchStatus } from './scoring';
 import { useVoiceStore } from './voiceStore';
 import { t, LanguageCode, TranslationKey } from './translations';
 import { startBreakMusic, fadeOutAndStop, stopBreakMusic } from './breakMusic';
+import { useBreakTimerStore } from './breakTimerStore';
 
 // API URLs
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
@@ -210,6 +211,7 @@ export async function cancelServeTimer() {
     clearTimeout(releaseAudioTimer);
     releaseAudioTimer = null;
   }
+  useBreakTimerStore.getState().stopTimer();
   if (inBreakMode) {
     inBreakMode = false;
     await stopBreakMusic();
@@ -348,6 +350,7 @@ export async function speak(text: string, style: AnnouncementStyle = 'score'): P
   if (inBreakMode) {
     console.log('🎵 Exiting break mode — reclaiming audio focus');
     inBreakMode = false;
+    useBreakTimerStore.getState().stopTimer();
     await stopBreakMusic();
   }
   await claimAudioFocus();
@@ -739,7 +742,7 @@ function pointToWord(point: number | string): string {
 }
 
 // Schedule "Time. X to serve" announcement after break
-function scheduleServeAnnouncement(serverName: string, delaySeconds: number) {
+function scheduleServeAnnouncement(serverName: string, delaySeconds: number, breakLabel: string = 'CHANGEOVER') {
   // Only cancel existing timer, don't exit break mode
   if (serveTimer) {
     clearTimeout(serveTimer);
@@ -747,10 +750,14 @@ function scheduleServeAnnouncement(serverName: string, delaySeconds: number) {
   }
   const lang = getLang();
   
+  // Start the UI countdown timer
+  useBreakTimerStore.getState().startTimer(delaySeconds, breakLabel);
+  
   console.log(`⏱️ Scheduling serve announcement in ${delaySeconds} seconds`);
   
   serveTimer = setTimeout(async () => {
     serveTimer = null;
+    useBreakTimerStore.getState().stopTimer();
     // Fade out break music before announcing (1 second fade)
     await fadeOutAndStop(1000);
     // speak() will automatically reclaim audio focus and exit break mode
@@ -898,7 +905,7 @@ export async function announceSetWon(
   
   await speak(announcement, 'set');
   enterBreakMode();
-  scheduleServeAnnouncement(nextServerName, 120);
+  scheduleServeAnnouncement(nextServerName, 120, 'SET BREAK');
 }
 
 // Announce match/set point

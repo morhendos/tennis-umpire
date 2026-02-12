@@ -1040,6 +1040,10 @@ export function announceFullScore(state: MatchState) {
     return;
   }
 
+  // Add who's serving
+  const serverName = players[server].name;
+  parts.push(`${serverName} ${t('toServe', lang)}`);
+
   const announcement = parts.join('... ');
   speak(announcement, 'calm');
 }

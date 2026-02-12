@@ -113,6 +113,7 @@ interface VoiceStore {
   language: string;
   audioEnabled: boolean;
   stadiumEcho: boolean;
+  echoIntensity: number; // 0-1, controls delay + volume
   voiceEngine: VoiceEngine;
   elevenLabsApiKey: string;
   googleApiKey: string;
@@ -126,6 +127,7 @@ interface VoiceStore {
   setGooglePitch: (value: number) => void;
   setAudioEnabled: (value: boolean) => void;
   setStadiumEcho: (value: boolean) => void;
+  setEchoIntensity: (value: number) => void;
   setLanguage: (langCode: string) => void;
   setVoiceEngine: (engine: VoiceEngine) => void;
   setElevenLabsApiKey: (key: string) => void;
@@ -157,6 +159,7 @@ export const useVoiceStore = create<VoiceStore>()(
       language: 'en',
       audioEnabled: true,
       stadiumEcho: false,
+      echoIntensity: 0.5,
       voiceEngine: 'google' as VoiceEngine,
       // Use env vars as defaults, can be overridden by user
       elevenLabsApiKey: ENV_ELEVENLABS_KEY,
@@ -221,6 +224,8 @@ export const useVoiceStore = create<VoiceStore>()(
       setAudioEnabled: (value: boolean) => set({ audioEnabled: value }),
 
       setStadiumEcho: (value: boolean) => set({ stadiumEcho: value }),
+
+      setEchoIntensity: (value: number) => set({ echoIntensity: value }),
 
       setLanguage: (langCode: string) => {
         // Update Google voice to match new language

@@ -84,6 +84,7 @@ export default function SettingsScreen() {
     language,
     audioEnabled,
     stadiumEcho,
+    echoIntensity,
     voiceEngine,
     elevenLabsApiKey,
     googleApiKey,
@@ -97,6 +98,7 @@ export default function SettingsScreen() {
     setGooglePitch,
     setAudioEnabled,
     setStadiumEcho,
+    setEchoIntensity,
     setLanguage,
     setVoiceEngine,
     setElevenLabsApiKey,
@@ -213,6 +215,23 @@ export default function SettingsScreen() {
                   thumbColor="#ffffff"
                 />
               </View>
+              {stadiumEcho && (
+                <View style={[styles.sliderGroup, { backgroundColor: c.bgCard, marginTop: 12 }]}>
+                  <View style={styles.sliderRow}>
+                    <View style={styles.sliderHeader}>
+                      <Text style={[styles.sliderLabel, { color: c.silver }]}>Intensity</Text>
+                      <Text style={[styles.sliderValue, { color: c.gold }]}>{echoIntensity.toFixed(2)}</Text>
+                    </View>
+                    <Text style={[styles.sliderHint, { color: c.muted }]}>Subtle whisper → Full stadium PA</Text>
+                    <Slider
+                      style={styles.slider}
+                      minimumValue={0} maximumValue={1} step={0.05}
+                      value={echoIntensity} onValueChange={setEchoIntensity}
+                      minimumTrackTintColor={c.gold} maximumTrackTintColor={c.muted} thumbTintColor={c.gold}
+                    />
+                  </View>
+                </View>
+              )}
             </View>
           )}
 

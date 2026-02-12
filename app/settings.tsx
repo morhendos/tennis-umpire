@@ -24,6 +24,7 @@ import {
 } from '@/lib/voiceStore';
 import { speak, getAvailableVoices } from '@/lib/speech';
 import { COLORS } from '@/constants/colors';
+import { useThemeStore } from '@/lib/themeStore';
 
 // ─── Section Header ─────────────────────────────────────────
 function SectionHeader({ icon, label, color = COLORS.muted }: { icon: string; label: string; color?: string }) {
@@ -99,6 +100,8 @@ export default function SettingsScreen() {
     resetToDefaults,
   } = useVoiceStore();
 
+  const { theme, toggleTheme } = useThemeStore();
+
   const [nativeVoiceCounts, setNativeVoiceCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -166,7 +169,7 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-back" size={24} color={COLORS.silver} />
             <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>AUDIO</Text>
+          <Text style={styles.headerTitle}>SETTINGS</Text>
           <View style={styles.backBtn} />
         </View>
 
@@ -427,6 +430,32 @@ export default function SettingsScreen() {
             </View>
           )}
 
+          {/* ═══════════════ APPEARANCE ═══════════════ */}
+          <View style={styles.cell}>
+            <Text style={styles.cellLabel}>APPEARANCE</Text>
+            <View style={styles.themeRow}>
+              <TouchableOpacity
+                style={[styles.themeOption, theme === 'dark' && styles.themeOptionSelected]}
+                onPress={() => theme !== 'dark' && toggleTheme()}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="moon-outline" size={22} color={theme === 'dark' ? COLORS.gold : COLORS.muted} />
+                <Text style={[styles.themeOptionText, theme === 'dark' && styles.themeOptionTextSelected]}>Dark</Text>
+                {theme === 'dark' && <Ionicons name="checkmark-circle" size={16} color={COLORS.gold} />}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.themeOption, theme === 'light' && styles.themeOptionSelected]}
+                onPress={() => theme !== 'light' && toggleTheme()}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="sunny-outline" size={22} color={theme === 'light' ? COLORS.gold : COLORS.muted} />
+                <Text style={[styles.themeOptionText, theme === 'light' && styles.themeOptionTextSelected]}>Light</Text>
+                {theme === 'light' && <Ionicons name="checkmark-circle" size={16} color={COLORS.gold} />}
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.themeHint}>Light mode improves visibility on sunny courts</Text>
+          </View>
+
           {/* ═══════════════ FOOTER ═══════════════ */}
           <View style={styles.footer}>
             <TouchableOpacity style={styles.resetBtn} onPress={resetToDefaults} activeOpacity={0.7}>
@@ -575,4 +604,19 @@ const styles = StyleSheet.create({
   },
   resetBtnText: { color: COLORS.muted, fontSize: 14, fontWeight: '500' },
   bottomPadding: { height: 40 },
+
+  // ─── Theme toggle ───────────────────────
+  themeRow: { flexDirection: 'row', gap: 10 },
+  themeOption: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.bgCard, paddingVertical: 14, paddingHorizontal: 16,
+    borderRadius: 12, gap: 10,
+    borderWidth: 1, borderColor: COLORS.muted + '20',
+  },
+  themeOptionSelected: {
+    backgroundColor: COLORS.gold + '10', borderColor: COLORS.gold + '40',
+  },
+  themeOptionText: { fontSize: 14, color: COLORS.silver, fontWeight: '500', flex: 1 },
+  themeOptionTextSelected: { color: COLORS.white, fontWeight: '600' },
+  themeHint: { marginTop: 10, fontSize: 11, color: COLORS.muted, textAlign: 'center' },
 });

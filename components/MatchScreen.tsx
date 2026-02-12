@@ -21,13 +21,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { getMatchStatus, getSetsWon } from '@/lib/scoring';
-import { COLORS } from '@/constants/colors';
+import { useColors, AppColors } from '@/constants/colors';
 import { AnimatedScore, ServeIndicator, IconButton } from '@/components/ui';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { getStatusConfig, StatusConfig } from '@/lib/matchUtils';
 
 interface MatchScreenProps {
-  match: any; // Match type from useMatch
+  match: any;
   scorePoint: (player: 'A' | 'B') => void;
   undo: () => void;
   canUndo: boolean;
@@ -47,14 +47,15 @@ export function MatchScreen({
   onResetMatch,
   flicActive = false,
 }: MatchScreenProps) {
-  // Keep screen awake during match — ensures TTS announcements work
-  // and Flic button presses trigger audio without OS throttling
+  // Keep screen awake during match
   useKeepAwake();
+
+  // Dynamic theme colors
+  const c = useColors();
 
   const [showManualButtons, setShowManualButtons] = useState(false);
 
   const handleNewMatch = () => {
-    // Skip confirmation if match is already complete
     if (match.isComplete) {
       onResetMatch();
       return;
@@ -73,6 +74,7 @@ export function MatchScreen({
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setShowManualButtons(prev => !prev);
   };
+
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -82,10 +84,12 @@ export function MatchScreen({
   const setsWon = getSetsWon(match);
   const statusConfig = getStatusConfig(status, match.players.A.name, match.players.B.name, match.tiebreak);
 
-  // LANDSCAPE LAYOUT - TV-style horizontal scoreboard
+  // ═══════════════════════════════════════════════
+  // LANDSCAPE LAYOUT
+  // ═══════════════════════════════════════════════
   if (isLandscape) {
     return (
-      <ScreenWrapper showCourtLines={false}>
+      <ScreenWrapper showCourtLines={false} colors={c}>
         <View style={[styles.landscapeContent, { 
           paddingTop: insets.top + 8, 
           paddingBottom: insets.bottom + 8,
@@ -93,7 +97,7 @@ export function MatchScreen({
           paddingRight: insets.right + 16,
         }]}>
           <View style={styles.landscapeMain}>
-            {/* Left: Player A Score Button (no flic only) */}
+            {/* Left: Player A Score Button */}
             {match.isComplete ? (
               <View style={styles.landscapeWinnerSide}>
                 {match.winner === 'A' && <Text style={styles.landscapeTrophy}>🏆</Text>}
@@ -105,10 +109,10 @@ export function MatchScreen({
                 activeOpacity={0.9}
               >
                 <LinearGradient
-                  colors={[COLORS.green, COLORS.greenLight]}
+                  colors={[c.green, c.greenLight]}
                   style={styles.landscapeScoreBtnGradient}
                 >
-                  <Text style={styles.landscapeScoreBtnName} numberOfLines={1}>
+                  <Text style={[styles.landscapeScoreBtnName, { color: '#ffffff' }]} numberOfLines={1}>
                     {match.players.A.name}
                   </Text>
                 </LinearGradient>
@@ -118,12 +122,12 @@ export function MatchScreen({
             {/* Center: TV-Style Scoreboard */}
             <View style={styles.landscapeScoreboard}>
               <LinearGradient
-                colors={[COLORS.bgCard, COLORS.bgSecondary]}
-                style={styles.landscapeScoreboardGradient}
+                colors={[c.bgCard, c.bgSecondary]}
+                style={[styles.landscapeScoreboardGradient, { borderColor: c.muted + '15' }]}
               >
                 {/* Status Banner */}
                 {statusConfig && (
-                  <View style={[styles.landscapeStatus, statusConfig.urgent && styles.landscapeStatusUrgent]}>
+                  <View style={[styles.landscapeStatus, { backgroundColor: c.bgCard, borderColor: c.muted + '20' }, statusConfig.urgent && { backgroundColor: c.red + '15', borderColor: c.red + '40' }]}>
                     <Text style={[styles.landscapeStatusText, { color: statusConfig.color }]}>
                       {statusConfig.text}
                     </Text>
@@ -131,29 +135,29 @@ export function MatchScreen({
                 )}
 
                 {/* Header Row */}
-                <View style={styles.lsbHeader}>
+                <View style={[styles.lsbHeader, { borderBottomColor: c.muted + '15' }]}>
                   <View style={styles.lsbNameCol} />
                   {match.isComplete ? (
                     match.sets.map((_: any, i: number) => (
-                      <Text key={i} style={styles.lsbSetLabel}>{i + 1}</Text>
+                      <Text key={i} style={[styles.lsbSetLabel, { color: c.muted }]}>{i + 1}</Text>
                     ))
                   ) : (
                     <>
                       {match.sets.slice(0, -1).map((_: any, i: number) => (
-                        <Text key={i} style={styles.lsbSetLabel}>{i + 1}</Text>
+                        <Text key={i} style={[styles.lsbSetLabel, { color: c.muted }]}>{i + 1}</Text>
                       ))}
-                      <Text style={styles.lsbSetLabelCurrent}>*</Text>
+                      <Text style={[styles.lsbSetLabel, { color: c.gold }]}>*</Text>
                     </>
                   )}
-                  <Text style={styles.lsbPointsLabel}>PTS</Text>
+                  <Text style={[styles.lsbPointsLabel, { color: c.muted }]}>PTS</Text>
                 </View>
 
                 {/* Player A Row */}
                 <View style={styles.lsbPlayerRow}>
                   <View style={styles.lsbNameCol}>
                     <View style={styles.lsbPlayerInfo}>
-                      {match.server === 'A' && <ServeIndicator compact />}
-                      <Text style={[styles.lsbPlayerName, match.server !== 'A' && { marginLeft: 18 }]} numberOfLines={1}>
+                      {match.server === 'A' && <ServeIndicator compact color={c.gold} />}
+                      <Text style={[styles.lsbPlayerName, { color: c.white }, match.server !== 'A' && { marginLeft: 18 }]} numberOfLines={1}>
                         {match.players.A.name}
                       </Text>
                     </View>
@@ -161,7 +165,7 @@ export function MatchScreen({
                   {match.isComplete ? (
                     match.sets.map((set: any, i: number) => (
                       <View key={i} style={styles.lsbSetCol}>
-                        <Text style={[styles.lsbSetScore, set.A > set.B && styles.lsbSetScoreWinner]}>
+                        <Text style={[styles.lsbSetScore, { color: c.silver }, set.A > set.B && { fontWeight: '700', color: c.white }]}>
                           {set.A}
                         </Text>
                       </View>
@@ -170,22 +174,22 @@ export function MatchScreen({
                     <>
                       {match.sets.slice(0, -1).map((set: any, i: number) => (
                         <View key={i} style={styles.lsbSetCol}>
-                          <Text style={[styles.lsbSetScore, set.A > set.B && styles.lsbSetScoreWinner]}>
+                          <Text style={[styles.lsbSetScore, { color: c.silver }, set.A > set.B && { fontWeight: '700', color: c.white }]}>
                             {set.A}
                           </Text>
                         </View>
                       ))}
-                      <View style={styles.lsbSetColCurrent}>
-                        <Text style={styles.lsbCurrentGames}>{match.games.A}</Text>
+                      <View style={styles.lsbSetCol}>
+                        <Text style={[styles.lsbCurrentGames, { color: c.white }]}>{match.games.A}</Text>
                       </View>
                     </>
                   )}
                   <View style={styles.lsbPointsCol}>
                     <LinearGradient
-                      colors={[COLORS.greenAccent + '30', COLORS.green + '20']}
+                      colors={[c.greenAccent + '30', c.green + '20']}
                       style={styles.lsbPointsBox}
                     >
-                      <Text style={styles.lsbPointsA}>
+                      <Text style={[styles.lsbPoints, { color: c.greenAccent }]}>
                         {match.tiebreak ? match.tiebreakPoints.A : match.points.A}
                       </Text>
                     </LinearGradient>
@@ -193,14 +197,14 @@ export function MatchScreen({
                 </View>
 
                 {/* Divider */}
-                <View style={styles.lsbDivider} />
+                <View style={[styles.lsbDivider, { backgroundColor: c.muted + '20' }]} />
 
                 {/* Player B Row */}
                 <View style={styles.lsbPlayerRow}>
                   <View style={styles.lsbNameCol}>
                     <View style={styles.lsbPlayerInfo}>
-                      {match.server === 'B' && <ServeIndicator compact />}
-                      <Text style={[styles.lsbPlayerName, match.server !== 'B' && { marginLeft: 18 }]} numberOfLines={1}>
+                      {match.server === 'B' && <ServeIndicator compact color={c.gold} />}
+                      <Text style={[styles.lsbPlayerName, { color: c.white }, match.server !== 'B' && { marginLeft: 18 }]} numberOfLines={1}>
                         {match.players.B.name}
                       </Text>
                     </View>
@@ -208,7 +212,7 @@ export function MatchScreen({
                   {match.isComplete ? (
                     match.sets.map((set: any, i: number) => (
                       <View key={i} style={styles.lsbSetCol}>
-                        <Text style={[styles.lsbSetScore, set.B > set.A && styles.lsbSetScoreWinner]}>
+                        <Text style={[styles.lsbSetScore, { color: c.silver }, set.B > set.A && { fontWeight: '700', color: c.white }]}>
                           {set.B}
                         </Text>
                       </View>
@@ -217,22 +221,22 @@ export function MatchScreen({
                     <>
                       {match.sets.slice(0, -1).map((set: any, i: number) => (
                         <View key={i} style={styles.lsbSetCol}>
-                          <Text style={[styles.lsbSetScore, set.B > set.A && styles.lsbSetScoreWinner]}>
+                          <Text style={[styles.lsbSetScore, { color: c.silver }, set.B > set.A && { fontWeight: '700', color: c.white }]}>
                             {set.B}
                           </Text>
                         </View>
                       ))}
-                      <View style={styles.lsbSetColCurrent}>
-                        <Text style={styles.lsbCurrentGames}>{match.games.B}</Text>
+                      <View style={styles.lsbSetCol}>
+                        <Text style={[styles.lsbCurrentGames, { color: c.white }]}>{match.games.B}</Text>
                       </View>
                     </>
                   )}
                   <View style={styles.lsbPointsCol}>
                     <LinearGradient
-                      colors={[COLORS.gold + '30', COLORS.goldMuted + '20']}
+                      colors={[c.gold + '30', c.goldMuted + '20']}
                       style={styles.lsbPointsBox}
                     >
-                      <Text style={styles.lsbPointsB}>
+                      <Text style={[styles.lsbPoints, { color: c.gold }]}>
                         {match.tiebreak ? match.tiebreakPoints.B : match.points.B}
                       </Text>
                     </LinearGradient>
@@ -240,43 +244,43 @@ export function MatchScreen({
                 </View>
 
                 {/* Bottom Controls */}
-                <View style={styles.lsbControls}>
+                <View style={[styles.lsbControls, { borderTopColor: c.muted + '15' }]}>
                   <TouchableOpacity
-                    style={[styles.lsbControlBtn, !canUndo && styles.lsbControlBtnDisabled]}
+                    style={[styles.lsbControlBtn, { backgroundColor: c.bgCard, borderColor: c.muted + '30' }, !canUndo && styles.lsbControlBtnDisabled]}
                     onPress={undo}
                     disabled={!canUndo}
                   >
-                    <Ionicons name="arrow-undo" size={16} color={canUndo ? COLORS.silver : COLORS.muted} />
+                    <Ionicons name="arrow-undo" size={16} color={canUndo ? c.silver : c.muted} />
                   </TouchableOpacity>
                   {flicActive && !match.isComplete && (
                     <TouchableOpacity
-                      style={[styles.lsbControlBtn, showManualButtons && styles.lsbControlBtnActive]}
+                      style={[styles.lsbControlBtn, { backgroundColor: c.bgCard, borderColor: c.muted + '30' }, showManualButtons && { borderColor: c.gold + '50', backgroundColor: c.gold + '15' }]}
                       onPress={toggleManualButtons}
                     >
-                      <Ionicons name="hand-left-outline" size={16} color={showManualButtons ? COLORS.gold : COLORS.silver} />
+                      <Ionicons name="hand-left-outline" size={16} color={showManualButtons ? c.gold : c.silver} />
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
-                    style={styles.lsbControlBtn}
+                    style={[styles.lsbControlBtn, { backgroundColor: c.bgCard, borderColor: c.muted + '30' }]}
                     onPress={toggleAudio}
                   >
                     <Ionicons 
                       name={audioEnabled ? 'volume-high-outline' : 'volume-mute-outline'} 
                       size={16} 
-                      color={COLORS.silver} 
+                      color={c.silver} 
                     />
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.lsbControlBtn}
+                    style={[styles.lsbControlBtn, { backgroundColor: c.bgCard, borderColor: c.muted + '30' }]}
                     onPress={handleNewMatch}
                   >
-                    <Ionicons name="refresh" size={16} color={COLORS.silver} />
+                    <Ionicons name="refresh" size={16} color={c.silver} />
                   </TouchableOpacity>
                 </View>
               </LinearGradient>
             </View>
 
-            {/* Right: Player B Score Button (no flic) OR Manual Panel (flic) */}
+            {/* Right: Player B Score Button OR Manual Panel */}
             {match.isComplete ? (
               <View style={styles.landscapeWinnerSide}>
                 {match.winner === 'B' && <Text style={styles.landscapeTrophy}>🏆</Text>}
@@ -288,57 +292,38 @@ export function MatchScreen({
                 activeOpacity={0.9}
               >
                 <LinearGradient
-                  colors={[COLORS.goldMuted, COLORS.gold]}
+                  colors={[c.goldMuted, c.gold]}
                   style={styles.landscapeScoreBtnGradient}
                 >
-                  <Text style={[styles.landscapeScoreBtnName, { color: COLORS.bgPrimary }]} numberOfLines={1}>
+                  <Text style={[styles.landscapeScoreBtnName, { color: c.bgPrimary }]} numberOfLines={1}>
                     {match.players.B.name}
                   </Text>
                 </LinearGradient>
               </TouchableOpacity>
             ) : flicActive && showManualButtons ? (
-              /* Compact landscape manual panel */
-              <View style={styles.lsManualPanel}>
+              <View style={[styles.lsManualPanel, { backgroundColor: c.bgCard, borderColor: c.muted + '15' }]}>
                 {/* Player A */}
                 <View style={styles.lsmpRow}>
-                  <View style={[styles.lsmpDot, { backgroundColor: COLORS.greenAccent }]} />
-                  <Text style={styles.lsmpName} numberOfLines={1}>{match.players.A.name}</Text>
-                  <TouchableOpacity
-                    style={styles.lsmpAddBtn}
-                    onPress={() => scorePoint('A')}
-                    activeOpacity={0.7}
-                  >
-                    <LinearGradient
-                      colors={[COLORS.green, COLORS.greenLight]}
-                      style={styles.lsmpAddGradient}
-                    >
-                      <Ionicons name="add" size={18} color={COLORS.white} />
+                  <View style={[styles.lsmpDot, { backgroundColor: c.greenAccent }]} />
+                  <Text style={[styles.lsmpName, { color: c.white }]} numberOfLines={1}>{match.players.A.name}</Text>
+                  <TouchableOpacity style={styles.lsmpAddBtn} onPress={() => scorePoint('A')} activeOpacity={0.7}>
+                    <LinearGradient colors={[c.green, c.greenLight]} style={styles.lsmpAddGradient}>
+                      <Ionicons name="add" size={18} color="#ffffff" />
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
-
-                <View style={styles.lsmpDivider} />
-
+                <View style={[styles.lsmpDivider, { backgroundColor: c.muted + '15' }]} />
                 {/* Player B */}
                 <View style={styles.lsmpRow}>
-                  <View style={[styles.lsmpDot, { backgroundColor: COLORS.gold }]} />
-                  <Text style={styles.lsmpName} numberOfLines={1}>{match.players.B.name}</Text>
-                  <TouchableOpacity
-                    style={styles.lsmpAddBtn}
-                    onPress={() => scorePoint('B')}
-                    activeOpacity={0.7}
-                  >
-                    <LinearGradient
-                      colors={[COLORS.goldMuted, COLORS.gold]}
-                      style={styles.lsmpAddGradient}
-                    >
-                      <Ionicons name="add" size={18} color={COLORS.bgPrimary} />
+                  <View style={[styles.lsmpDot, { backgroundColor: c.gold }]} />
+                  <Text style={[styles.lsmpName, { color: c.white }]} numberOfLines={1}>{match.players.B.name}</Text>
+                  <TouchableOpacity style={styles.lsmpAddBtn} onPress={() => scorePoint('B')} activeOpacity={0.7}>
+                    <LinearGradient colors={[c.goldMuted, c.gold]} style={styles.lsmpAddGradient}>
+                      <Ionicons name="add" size={18} color={c.bgPrimary} />
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
-
-                <View style={styles.lsmpDivider} />
-
+                <View style={[styles.lsmpDivider, { backgroundColor: c.muted + '15' }]} />
                 {/* Undo */}
                 <TouchableOpacity
                   style={[styles.lsmpUndoBtn, !canUndo && { opacity: 0.4 }]}
@@ -346,8 +331,8 @@ export function MatchScreen({
                   disabled={!canUndo}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="arrow-undo" size={14} color={canUndo ? COLORS.silver : COLORS.muted} />
-                  <Text style={[styles.lsmpUndoText, !canUndo && { color: COLORS.muted }]}>Undo</Text>
+                  <Ionicons name="arrow-undo" size={14} color={canUndo ? c.silver : c.muted} />
+                  <Text style={[styles.lsmpUndoText, { color: canUndo ? c.silver : c.muted }]}>Undo</Text>
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -357,9 +342,11 @@ export function MatchScreen({
     );
   }
 
+  // ═══════════════════════════════════════════════
   // PORTRAIT LAYOUT
+  // ═══════════════════════════════════════════════
   return (
-    <ScreenWrapper showCourtLines={false}>
+    <ScreenWrapper showCourtLines={false} colors={c}>
       <View style={[styles.safeContent, { 
         paddingTop: insets.top, 
         paddingBottom: insets.bottom + 8,
@@ -370,22 +357,22 @@ export function MatchScreen({
         <View style={styles.header}>
           <IconButton 
             icon={audioEnabled ? 'volume-high-outline' : 'volume-mute-outline'} 
-            onPress={toggleAudio} 
+            onPress={toggleAudio}
+            colors={c}
           />
-
           <View style={styles.headerCenter}>
-            <Text style={styles.headerLabel}>LIVE MATCH</Text>
+            <Text style={[styles.headerLabel, { color: c.greenAccent }]}>LIVE MATCH</Text>
           </View>
-
           <IconButton 
             icon="settings-outline" 
-            onPress={() => router.push('/settings')} 
+            onPress={() => router.push('/settings')}
+            colors={c}
           />
         </View>
 
         {/* Status Banner */}
         {statusConfig && (
-          <View style={[styles.statusBanner, statusConfig.urgent && styles.statusUrgent]}>
+          <View style={[styles.statusBanner, { backgroundColor: c.bgCard, borderColor: c.muted + '20' }, statusConfig.urgent && { backgroundColor: c.red + '15', borderColor: c.red + '40' }]}>
             <View style={[styles.statusDot, { backgroundColor: statusConfig.color }]} />
             <Text style={[styles.statusLabel, { color: statusConfig.color }]}>
               {statusConfig.text}
@@ -397,15 +384,15 @@ export function MatchScreen({
         {/* Main Scoreboard */}
         <View style={styles.scoreboardArea}>
           <LinearGradient
-            colors={[COLORS.bgCard, COLORS.bgSecondary]}
-            style={styles.scoreboard}
+            colors={[c.bgCard, c.bgSecondary]}
+            style={[styles.scoreboard, { borderColor: c.muted + '15' }]}
           >
             {/* Header Row */}
-            <View style={styles.sbHeader}>
+            <View style={[styles.sbHeader, { borderBottomColor: c.muted + '15' }]}>
               <View style={styles.sbNameCol} />
-              <Text style={styles.sbColLabel}>SETS</Text>
-              <Text style={styles.sbColLabel}>GAMES</Text>
-              <Text style={styles.sbColLabelWide}>POINTS</Text>
+              <Text style={[styles.sbColLabel, { color: c.muted }]}>SETS</Text>
+              <Text style={[styles.sbColLabel, { color: c.muted }]}>GAMES</Text>
+              <Text style={[styles.sbColLabelWide, { color: c.muted }]}>POINTS</Text>
             </View>
 
             {/* Player A */}
@@ -413,27 +400,27 @@ export function MatchScreen({
               <View style={styles.sbNameCol}>
                 <View style={styles.sbPlayerInfo}>
                   <View style={styles.sbServeArea}>
-                    {match.server === 'A' && <ServeIndicator />}
+                    {match.server === 'A' && <ServeIndicator color={c.gold} />}
                   </View>
-                  <Text style={styles.sbPlayerName} numberOfLines={1}>
+                  <Text style={[styles.sbPlayerName, { color: c.white }]} numberOfLines={1}>
                     {match.players.A.name}
                   </Text>
                 </View>
               </View>
               <View style={styles.sbScoreCol}>
-                <Text style={styles.sbSetScore}>{setsWon.A}</Text>
+                <Text style={[styles.sbSetScore, { color: c.silver }]}>{setsWon.A}</Text>
               </View>
               <View style={styles.sbScoreCol}>
-                <AnimatedScore value={match.games.A} color={COLORS.white} size={32} />
+                <AnimatedScore value={match.games.A} color={c.white} size={32} />
               </View>
               <View style={styles.sbPointsCol}>
                 <LinearGradient
-                  colors={[COLORS.greenAccent + '30', COLORS.green + '20']}
+                  colors={[c.greenAccent + '30', c.green + '20']}
                   style={styles.sbPointsBox}
                 >
                   <AnimatedScore 
                     value={match.tiebreak ? match.tiebreakPoints.A : match.points.A} 
-                    color={COLORS.greenAccent}
+                    color={c.greenAccent}
                     size={36}
                   />
                 </LinearGradient>
@@ -442,7 +429,7 @@ export function MatchScreen({
 
             {/* Divider */}
             <LinearGradient
-              colors={['transparent', COLORS.muted + '40', 'transparent']}
+              colors={['transparent', c.muted + '40', 'transparent']}
               style={styles.sbDivider}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
@@ -453,27 +440,27 @@ export function MatchScreen({
               <View style={styles.sbNameCol}>
                 <View style={styles.sbPlayerInfo}>
                   <View style={styles.sbServeArea}>
-                    {match.server === 'B' && <ServeIndicator />}
+                    {match.server === 'B' && <ServeIndicator color={c.gold} />}
                   </View>
-                  <Text style={styles.sbPlayerName} numberOfLines={1}>
+                  <Text style={[styles.sbPlayerName, { color: c.white }]} numberOfLines={1}>
                     {match.players.B.name}
                   </Text>
                 </View>
               </View>
               <View style={styles.sbScoreCol}>
-                <Text style={styles.sbSetScore}>{setsWon.B}</Text>
+                <Text style={[styles.sbSetScore, { color: c.silver }]}>{setsWon.B}</Text>
               </View>
               <View style={styles.sbScoreCol}>
-                <AnimatedScore value={match.games.B} color={COLORS.white} size={32} />
+                <AnimatedScore value={match.games.B} color={c.white} size={32} />
               </View>
               <View style={styles.sbPointsCol}>
                 <LinearGradient
-                  colors={[COLORS.gold + '30', COLORS.goldMuted + '20']}
+                  colors={[c.gold + '30', c.goldMuted + '20']}
                   style={styles.sbPointsBox}
                 >
                   <AnimatedScore 
                     value={match.tiebreak ? match.tiebreakPoints.B : match.points.B} 
-                    color={COLORS.gold}
+                    color={c.gold}
                     size={36}
                   />
                 </LinearGradient>
@@ -482,11 +469,11 @@ export function MatchScreen({
 
             {/* Set History */}
             {((match.isComplete && match.sets.length >= 1) || match.sets.length > 1) && (
-              <View style={styles.setHistoryRow}>
+              <View style={[styles.setHistoryRow, { borderTopColor: c.muted + '15' }]}>
                 {(match.isComplete ? match.sets : match.sets.slice(0, -1)).map((set: any, i: number) => (
                   <View key={i} style={styles.setHistoryItem}>
-                    <Text style={styles.setHistoryTitle}>SET {i + 1}</Text>
-                    <Text style={styles.setHistoryValue}>{set.A} - {set.B}</Text>
+                    <Text style={[styles.setHistoryTitle, { color: c.muted }]}>SET {i + 1}</Text>
+                    <Text style={[styles.setHistoryValue, { color: c.silver }]}>{set.A} - {set.B}</Text>
                   </View>
                 ))}
               </View>
@@ -498,96 +485,79 @@ export function MatchScreen({
         {match.isComplete ? (
           <View style={styles.winnerArea}>
             <Text style={styles.trophyEmoji}>🏆</Text>
-            <Text style={styles.winnerText}>CHAMPION</Text>
-            <Text style={styles.winnerName}>{match.players[match.winner!].name}</Text>
+            <Text style={[styles.winnerText, { color: c.muted }]}>CHAMPION</Text>
+            <Text style={[styles.winnerName, { color: c.gold }]}>{match.players[match.winner!].name}</Text>
           </View>
         ) : flicActive && !showManualButtons ? (
-          /* Flic display mode — scoreboard-focused, manual hidden */
           <View style={styles.flicModeArea}>
             <View style={styles.flicModeIndicator}>
               <View style={styles.flicModeDots}>
-                <View style={[styles.flicModeDot, { backgroundColor: COLORS.greenAccent }]} />
-                <View style={[styles.flicModeDot, { backgroundColor: COLORS.gold }]} />
+                <View style={[styles.flicModeDot, { backgroundColor: c.greenAccent }]} />
+                <View style={[styles.flicModeDot, { backgroundColor: c.gold }]} />
               </View>
-              <Text style={styles.flicModeText}>Scoring via Flic</Text>
+              <Text style={[styles.flicModeText, { color: c.muted }]}>Scoring via Flic</Text>
             </View>
-            <TouchableOpacity style={styles.manualToggle} onPress={toggleManualButtons} activeOpacity={0.7}>
-              <Ionicons name="hand-left-outline" size={14} color={COLORS.muted} />
-              <Text style={styles.manualToggleText}>Manual scoring</Text>
-              <Ionicons name="chevron-down" size={14} color={COLORS.muted} />
+            <TouchableOpacity style={[styles.manualToggle, { backgroundColor: c.bgCard, borderColor: c.muted + '20' }]} onPress={toggleManualButtons} activeOpacity={0.7}>
+              <Ionicons name="hand-left-outline" size={14} color={c.muted} />
+              <Text style={[styles.manualToggleText, { color: c.muted }]}>Manual scoring</Text>
+              <Ionicons name="chevron-down" size={14} color={c.muted} />
             </TouchableOpacity>
           </View>
         ) : flicActive && showManualButtons ? (
-          /* Compact manual scoring panel — flic mode with manual override */
           <View style={styles.manualPanelArea}>
             <TouchableOpacity style={styles.manualToggleCollapse} onPress={toggleManualButtons} activeOpacity={0.7}>
-              <Ionicons name="hand-left-outline" size={14} color={COLORS.muted} />
-              <Text style={styles.manualToggleText}>Hide manual scoring</Text>
-              <Ionicons name="chevron-up" size={14} color={COLORS.muted} />
+              <Ionicons name="hand-left-outline" size={14} color={c.muted} />
+              <Text style={[styles.manualToggleText, { color: c.muted }]}>Hide manual scoring</Text>
+              <Ionicons name="chevron-up" size={14} color={c.muted} />
             </TouchableOpacity>
 
-            <View style={styles.manualPanel}>
+            <View style={[styles.manualPanel, { backgroundColor: c.bgCard, borderColor: c.muted + '15' }]}>
               {/* Player A row */}
               <View style={styles.mpRow}>
                 <View style={styles.mpPlayerInfo}>
-                  <View style={[styles.mpDot, { backgroundColor: COLORS.greenAccent }]} />
-                  <Text style={styles.mpPlayerName} numberOfLines={1}>{match.players.A.name}</Text>
+                  <View style={[styles.mpDot, { backgroundColor: c.greenAccent }]} />
+                  <Text style={[styles.mpPlayerName, { color: c.white }]} numberOfLines={1}>{match.players.A.name}</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.mpAddBtn}
-                  onPress={() => scorePoint('A')}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={[COLORS.green, COLORS.greenLight]}
-                    style={styles.mpAddBtnGradient}
-                  >
-                    <Ionicons name="add" size={20} color={COLORS.white} />
-                    <Text style={styles.mpAddBtnText}>Point</Text>
+                <TouchableOpacity style={styles.mpAddBtn} onPress={() => scorePoint('A')} activeOpacity={0.7}>
+                  <LinearGradient colors={[c.green, c.greenLight]} style={styles.mpAddBtnGradient}>
+                    <Ionicons name="add" size={20} color="#ffffff" />
+                    <Text style={[styles.mpAddBtnText, { color: '#ffffff' }]}>Point</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
 
-              {/* Divider */}
-              <View style={styles.mpDivider} />
+              <View style={[styles.mpDivider, { backgroundColor: c.muted + '15' }]} />
 
               {/* Player B row */}
               <View style={styles.mpRow}>
                 <View style={styles.mpPlayerInfo}>
-                  <View style={[styles.mpDot, { backgroundColor: COLORS.gold }]} />
-                  <Text style={styles.mpPlayerName} numberOfLines={1}>{match.players.B.name}</Text>
+                  <View style={[styles.mpDot, { backgroundColor: c.gold }]} />
+                  <Text style={[styles.mpPlayerName, { color: c.white }]} numberOfLines={1}>{match.players.B.name}</Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.mpAddBtn}
-                  onPress={() => scorePoint('B')}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={[COLORS.goldMuted, COLORS.gold]}
-                    style={styles.mpAddBtnGradient}
-                  >
-                    <Ionicons name="add" size={20} color={COLORS.bgPrimary} />
-                    <Text style={[styles.mpAddBtnText, { color: COLORS.bgPrimary }]}>Point</Text>
+                <TouchableOpacity style={styles.mpAddBtn} onPress={() => scorePoint('B')} activeOpacity={0.7}>
+                  <LinearGradient colors={[c.goldMuted, c.gold]} style={styles.mpAddBtnGradient}>
+                    <Ionicons name="add" size={20} color={c.bgPrimary} />
+                    <Text style={[styles.mpAddBtnText, { color: c.bgPrimary }]}>Point</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
 
               {/* Undo */}
-              <View style={styles.mpUndoRow}>
+              <View style={[styles.mpUndoRow, { borderTopColor: c.muted + '15' }]}>
                 <TouchableOpacity
                   style={[styles.mpUndoBtn, !canUndo && styles.mpUndoBtnDisabled]}
                   onPress={undo}
                   disabled={!canUndo}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="arrow-undo" size={16} color={canUndo ? COLORS.silver : COLORS.muted} />
-                  <Text style={[styles.mpUndoText, !canUndo && { color: COLORS.muted }]}>Undo last point</Text>
+                  <Ionicons name="arrow-undo" size={16} color={canUndo ? c.silver : c.muted} />
+                  <Text style={[styles.mpUndoText, { color: canUndo ? c.silver : c.muted }]}>Undo last point</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         ) : (
-          /* Standard score buttons — no flic connected */
+          /* Standard score buttons */
           <View style={styles.btnArea}>
             <TouchableOpacity
               style={styles.scoreBtn}
@@ -595,13 +565,13 @@ export function MatchScreen({
               activeOpacity={0.9}
             >
               <LinearGradient
-                colors={[COLORS.green, COLORS.greenLight]}
+                colors={[c.green, c.greenLight]}
                 style={styles.scoreBtnGradient}
                 start={{ x: 0, y: 1 }}
                 end={{ x: 0, y: 0 }}
               >
-                <Text style={styles.scoreBtnName}>{match.players.A.name}</Text>
-                <Text style={styles.scoreBtnLabel}>SCORES</Text>
+                <Text style={[styles.scoreBtnName, { color: '#ffffff' }]}>{match.players.A.name}</Text>
+                <Text style={[styles.scoreBtnLabel, { color: '#ffffff80' }]}>SCORES</Text>
               </LinearGradient>
             </TouchableOpacity>
 
@@ -611,15 +581,15 @@ export function MatchScreen({
               activeOpacity={0.9}
             >
               <LinearGradient
-                colors={[COLORS.goldMuted, COLORS.gold]}
+                colors={[c.goldMuted, c.gold]}
                 style={styles.scoreBtnGradient}
                 start={{ x: 0, y: 1 }}
                 end={{ x: 0, y: 0 }}
               >
-                <Text style={[styles.scoreBtnName, { color: COLORS.bgPrimary }]}>
+                <Text style={[styles.scoreBtnName, { color: c.bgPrimary }]}>
                   {match.players.B.name}
                 </Text>
-                <Text style={[styles.scoreBtnLabel, { color: COLORS.bgPrimary + 'aa' }]}>
+                <Text style={[styles.scoreBtnLabel, { color: c.bgPrimary + 'aa' }]}>
                   SCORES
                 </Text>
               </LinearGradient>
@@ -628,7 +598,7 @@ export function MatchScreen({
         )}
 
         {/* Bottom Controls */}
-        <View style={styles.controlsArea}>
+        <View style={[styles.controlsArea, { backgroundColor: c.bgCard }]}>
           <TouchableOpacity
             style={[styles.controlBtn, !canUndo && styles.controlBtnDisabled]}
             onPress={undo}
@@ -638,22 +608,22 @@ export function MatchScreen({
             <Ionicons 
               name="arrow-undo" 
               size={20} 
-              color={canUndo ? COLORS.silver : COLORS.muted} 
+              color={canUndo ? c.silver : c.muted} 
             />
-            <Text style={[styles.controlText, !canUndo && styles.controlTextDisabled]}>
+            <Text style={[styles.controlText, { color: canUndo ? c.silver : c.muted }]}>
               Undo
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.controlDivider} />
+          <View style={[styles.controlDivider, { backgroundColor: c.muted + '30' }]} />
 
           <TouchableOpacity 
             style={styles.controlBtn} 
             onPress={handleNewMatch}
             activeOpacity={0.7}
           >
-            <Ionicons name="refresh" size={20} color={COLORS.silver} />
-            <Text style={styles.controlText}>New Match</Text>
+            <Ionicons name="refresh" size={20} color={c.silver} />
+            <Text style={[styles.controlText, { color: c.silver }]}>New Match</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -661,6 +631,9 @@ export function MatchScreen({
   );
 }
 
+// ═══════════════════════════════════════════════
+// STYLES (structural only — colors applied inline)
+// ═══════════════════════════════════════════════
 const styles = StyleSheet.create({
   safeContent: {
     flex: 1,
@@ -680,7 +653,6 @@ const styles = StyleSheet.create({
   headerLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.greenAccent,
     letterSpacing: 3,
   },
 
@@ -692,15 +664,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 20,
     paddingVertical: 14,
-    backgroundColor: COLORS.bgCard,
     borderRadius: 12,
     gap: 12,
     borderWidth: 1,
-    borderColor: COLORS.muted + '20',
-  },
-  statusUrgent: {
-    backgroundColor: COLORS.red + '15',
-    borderColor: COLORS.red + '40',
   },
   statusDot: {
     width: 6,
@@ -721,7 +687,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.muted + '15',
   },
   sbHeader: {
     flexDirection: 'row',
@@ -729,7 +694,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.muted + '15',
   },
   sbNameCol: {
     flex: 1,
@@ -739,7 +703,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 9,
     fontWeight: '700',
-    color: COLORS.muted,
     letterSpacing: 1,
   },
   sbColLabelWide: {
@@ -747,11 +710,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 9,
     fontWeight: '700',
-    color: COLORS.muted,
     letterSpacing: 1,
   },
-
-  // Player rows
   sbPlayerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -772,7 +732,6 @@ const styles = StyleSheet.create({
   sbPlayerName: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.white,
     flex: 1,
   },
   sbScoreCol: {
@@ -782,7 +741,6 @@ const styles = StyleSheet.create({
   sbSetScore: {
     fontSize: 24,
     fontWeight: '300',
-    color: COLORS.silver,
   },
   sbPointsCol: {
     width: 80,
@@ -807,7 +765,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: COLORS.muted + '15',
     gap: 32,
   },
   setHistoryItem: {
@@ -816,14 +773,12 @@ const styles = StyleSheet.create({
   setHistoryTitle: {
     fontSize: 9,
     fontWeight: '700',
-    color: COLORS.muted,
     letterSpacing: 1,
     marginBottom: 6,
   },
   setHistoryValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.silver,
   },
 
   // Flic display mode
@@ -849,7 +804,6 @@ const styles = StyleSheet.create({
   flicModeText: {
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.muted,
     letterSpacing: 1,
   },
   manualToggle: {
@@ -858,10 +812,8 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    backgroundColor: COLORS.bgCard,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.muted + '20',
   },
   manualToggleCollapse: {
     flexDirection: 'row',
@@ -873,21 +825,18 @@ const styles = StyleSheet.create({
   },
   manualToggleText: {
     fontSize: 12,
-    color: COLORS.muted,
     fontWeight: '500',
   },
 
-  // Manual scoring panel (flic mode)
+  // Manual scoring panel
   manualPanelArea: {
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   manualPanel: {
-    backgroundColor: COLORS.bgCard,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.muted + '15',
     padding: 16,
     gap: 12,
   },
@@ -911,7 +860,6 @@ const styles = StyleSheet.create({
   mpPlayerName: {
     fontSize: 17,
     fontWeight: '600',
-    color: COLORS.white,
     flex: 1,
   },
   mpAddBtn: {
@@ -928,17 +876,14 @@ const styles = StyleSheet.create({
   mpAddBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.white,
   },
   mpDivider: {
     height: 1,
-    backgroundColor: COLORS.muted + '15',
   },
   mpUndoRow: {
     alignItems: 'center',
     paddingTop: 4,
     borderTopWidth: 1,
-    borderTopColor: COLORS.muted + '15',
   },
   mpUndoBtn: {
     flexDirection: 'row',
@@ -953,10 +898,9 @@ const styles = StyleSheet.create({
   mpUndoText: {
     fontSize: 13,
     fontWeight: '500',
-    color: COLORS.silver,
   },
 
-  // Score buttons (standard, no flic)
+  // Score buttons
   btnArea: {
     flex: 1,
     flexDirection: 'row',
@@ -978,14 +922,12 @@ const styles = StyleSheet.create({
   scoreBtnName: {
     fontSize: 20,
     fontWeight: '700',
-    color: COLORS.white,
     marginBottom: 6,
     textAlign: 'center',
   },
   scoreBtnLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: COLORS.white + '80',
     letterSpacing: 3,
   },
 
@@ -1002,14 +944,12 @@ const styles = StyleSheet.create({
   winnerText: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.muted,
     letterSpacing: 4,
     marginBottom: 8,
   },
   winnerName: {
     fontSize: 36,
     fontWeight: '700',
-    color: COLORS.gold,
   },
 
   // Controls
@@ -1017,7 +957,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 20,
-    backgroundColor: COLORS.bgCard,
     borderRadius: 16,
     padding: 4,
   },
@@ -1035,15 +974,10 @@ const styles = StyleSheet.create({
   controlText: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.silver,
-  },
-  controlTextDisabled: {
-    color: COLORS.muted,
   },
   controlDivider: {
     width: 1,
     height: 24,
-    backgroundColor: COLORS.muted + '30',
   },
 
   // ==========================================
@@ -1074,7 +1008,6 @@ const styles = StyleSheet.create({
   landscapeScoreBtnName: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.white,
     textAlign: 'center',
     writingDirection: 'ltr',
   },
@@ -1095,22 +1028,15 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     borderWidth: 1,
-    borderColor: COLORS.muted + '15',
     borderRadius: 16,
   },
   landscapeStatus: {
     alignSelf: 'center',
     paddingHorizontal: 16,
     paddingVertical: 6,
-    backgroundColor: COLORS.bgCard,
     borderRadius: 8,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: COLORS.muted + '20',
-  },
-  landscapeStatusUrgent: {
-    backgroundColor: COLORS.red + '15',
-    borderColor: COLORS.red + '40',
   },
   landscapeStatusText: {
     fontSize: 11,
@@ -1118,14 +1044,13 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  // Landscape Scoreboard (lsb) styles
+  // Landscape Scoreboard
   lsbHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.muted + '15',
   },
   lsbNameCol: {
     flex: 1,
@@ -1136,21 +1061,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.muted,
-  },
-  lsbSetLabelCurrent: {
-    width: 36,
-    textAlign: 'center',
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.gold,
   },
   lsbPointsLabel: {
     width: 56,
     textAlign: 'center',
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.muted,
   },
   lsbPlayerRow: {
     flexDirection: 'row',
@@ -1164,7 +1080,6 @@ const styles = StyleSheet.create({
   lsbPlayerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.white,
   },
   lsbSetCol: {
     width: 36,
@@ -1173,21 +1088,11 @@ const styles = StyleSheet.create({
   lsbSetScore: {
     fontSize: 20,
     fontWeight: '400',
-    color: COLORS.silver,
     fontVariant: ['tabular-nums'],
-  },
-  lsbSetScoreWinner: {
-    fontWeight: '700',
-    color: COLORS.white,
-  },
-  lsbSetColCurrent: {
-    width: 36,
-    alignItems: 'center',
   },
   lsbCurrentGames: {
     fontSize: 22,
     fontWeight: '700',
-    color: COLORS.white,
     fontVariant: ['tabular-nums'],
   },
   lsbPointsCol: {
@@ -1201,21 +1106,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  lsbPointsA: {
+  lsbPoints: {
     fontSize: 24,
     fontWeight: '700',
-    color: COLORS.greenAccent,
-    fontVariant: ['tabular-nums'],
-  },
-  lsbPointsB: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.gold,
     fontVariant: ['tabular-nums'],
   },
   lsbDivider: {
     height: 1,
-    backgroundColor: COLORS.muted + '20',
     marginVertical: 4,
   },
   lsbControls: {
@@ -1225,33 +1122,24 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: COLORS.muted + '15',
   },
   lsbControlBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.bgCard,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: COLORS.muted + '30',
   },
   lsbControlBtnDisabled: {
     opacity: 0.4,
   },
-  lsbControlBtnActive: {
-    borderColor: COLORS.gold + '50',
-    backgroundColor: COLORS.gold + '15',
-  },
 
-  // Landscape manual panel (flic mode)
+  // Landscape manual panel
   lsManualPanel: {
     width: 160,
-    backgroundColor: COLORS.bgCard,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.muted + '15',
     padding: 12,
     justifyContent: 'center',
     gap: 8,
@@ -1270,7 +1158,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.white,
   },
   lsmpAddBtn: {
     borderRadius: 10,
@@ -1284,7 +1171,6 @@ const styles = StyleSheet.create({
   },
   lsmpDivider: {
     height: 1,
-    backgroundColor: COLORS.muted + '15',
   },
   lsmpUndoBtn: {
     flexDirection: 'row',
@@ -1296,6 +1182,5 @@ const styles = StyleSheet.create({
   lsmpUndoText: {
     fontSize: 12,
     fontWeight: '500',
-    color: COLORS.silver,
   },
 });

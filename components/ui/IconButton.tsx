@@ -5,10 +5,11 @@
  * Supports both Ionicons and Feather icon families.
  */
 
-import { TouchableOpacity, StyleSheet } from 'react-native';
+import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { COLORS } from '@/constants/colors';
+import { COLORS, AppColors } from '@/constants/colors';
+import { useThemeStore } from '@/lib/themeStore';
 
 interface IconButtonProps {
   /** Icon name from the selected icon family */
@@ -21,6 +22,8 @@ interface IconButtonProps {
   size?: number;
   /** Disable the button */
   disabled?: boolean;
+  /** Override colors for theme support */
+  colors?: AppColors;
 }
 
 export function IconButton({ 
@@ -29,16 +32,23 @@ export function IconButton({
   onPress, 
   size = 22,
   disabled = false,
+  colors,
 }: IconButtonProps) {
+  const theme = useThemeStore((s) => s.theme);
+  const c = colors || COLORS;
   const IconComponent = iconFamily === 'feather' ? Feather : Ionicons;
   
   return (
     <TouchableOpacity onPress={onPress} disabled={disabled} activeOpacity={0.7}>
-      <BlurView intensity={30} tint="dark" style={[styles.iconBtn, disabled && styles.iconBtnDisabled]}>
+      <BlurView 
+        intensity={30} 
+        tint={theme === 'light' ? 'light' : 'dark'} 
+        style={[styles.iconBtn, { borderColor: c.muted + '30' }, disabled && styles.iconBtnDisabled]}
+      >
         <IconComponent 
           name={icon as any} 
           size={size} 
-          color={disabled ? COLORS.muted : COLORS.silver} 
+          color={disabled ? c.muted : c.silver} 
         />
       </BlurView>
     </TouchableOpacity>
@@ -54,7 +64,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: COLORS.muted + '30',
   },
   iconBtnDisabled: {
     opacity: 0.4,

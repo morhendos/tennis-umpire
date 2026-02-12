@@ -1,21 +1,25 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '@/constants/colors';
+import { COLORS, AppColors } from '@/constants/colors';
 
 interface ScreenWrapperProps {
   children: React.ReactNode;
   showCourtLines?: boolean;
+  /** Pass dynamic colors for theme support */
+  colors?: AppColors;
 }
 
 /**
  * Shared screen wrapper with gradient background and optional court lines
  */
-export function ScreenWrapper({ children, showCourtLines = true }: ScreenWrapperProps) {
+export function ScreenWrapper({ children, showCourtLines = true, colors }: ScreenWrapperProps) {
+  const c = colors || COLORS;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: c.bgPrimary }]}>
       <LinearGradient
-        colors={[COLORS.bgPrimary, COLORS.bgSecondary, COLORS.bgPrimary]}
+        colors={[c.bgPrimary, c.bgSecondary, c.bgPrimary]}
         style={StyleSheet.absoluteFill}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
@@ -23,8 +27,8 @@ export function ScreenWrapper({ children, showCourtLines = true }: ScreenWrapper
       
       {showCourtLines && (
         <View style={styles.courtLines}>
-          <View style={styles.courtLineH} />
-          <View style={styles.courtLineV} />
+          <View style={[styles.courtLineH, { backgroundColor: c.white }]} />
+          <View style={[styles.courtLineV, { backgroundColor: c.white }]} />
         </View>
       )}
 
@@ -36,7 +40,6 @@ export function ScreenWrapper({ children, showCourtLines = true }: ScreenWrapper
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.bgPrimary,
   },
   courtLines: {
     ...StyleSheet.absoluteFillObject,
@@ -48,12 +51,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '80%',
     height: 2,
-    backgroundColor: COLORS.white,
   },
   courtLineV: {
     position: 'absolute',
     width: 2,
     height: '60%',
-    backgroundColor: COLORS.white,
   },
 });

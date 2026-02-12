@@ -29,6 +29,22 @@ export function getTrackList(): { id: string; name: string }[] {
   return TRACKS.map(t => ({ id: t.id, name: t.name }));
 }
 
+// Shuffled playlist — cycles through all tracks before repeating,
+// so no song plays twice in a row
+let shuffledQueue: typeof TRACKS = [];
+
+function getNextShuffledTrack(): typeof TRACKS[0] {
+  if (shuffledQueue.length === 0) {
+    // Reshuffle using Fisher-Yates
+    shuffledQueue = [...TRACKS];
+    for (let i = shuffledQueue.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledQueue[i], shuffledQueue[j]] = [shuffledQueue[j], shuffledQueue[i]];
+    }
+  }
+  return shuffledQueue.shift()!;
+}
+
 // Pick which track to play
 function pickTrack(): typeof TRACKS[0] | null {
   if (TRACKS.length === 0) return null;
@@ -36,7 +52,7 @@ function pickTrack(): typeof TRACKS[0] | null {
   const { breakMusicTrack } = useVoiceStore.getState();
 
   if (breakMusicTrack === 'shuffle') {
-    return TRACKS[Math.floor(Math.random() * TRACKS.length)];
+    return getNextShuffledTrack();
   }
 
   return TRACKS.find(t => t.id === breakMusicTrack) || TRACKS[0];

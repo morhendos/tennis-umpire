@@ -58,3 +58,6 @@ Thumbs.db
 
 # Misc
 app-example
+
+# APK builds
+builds/

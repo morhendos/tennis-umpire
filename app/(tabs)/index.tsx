@@ -3,7 +3,7 @@ import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMatch } from '@/lib/useMatch';
 import { useFlic } from '@/lib/useFlic';
-import { announceFullScore } from '@/lib/speech';
+import { announceFullScore, cancelServeTimer } from '@/lib/speech';
 import { MatchFormatType } from '@/lib/scoring';
 import { usePlayerStore } from '@/lib/playerStore';
 import { useColors } from '@/constants/colors';
@@ -52,6 +52,7 @@ export default function ScoreboardScreen() {
   };
 
   const handleResetMatch = () => {
+    cancelServeTimer();
     resetMatch();
     setSetupStep('players');
   };

@@ -1052,5 +1052,15 @@ export function announceFullScore(state: MatchState) {
 export function announceMatchStart(playerA: string, playerB: string, serverName?: string) {
   const lang = getLang();
   const server = serverName || playerA;
-  speak(`${playerA} ${t('versus', lang)} ${playerB}... ${server} ${t('toServe', lang)}.`, 'calm');
+
+  const closingPhrases: TranslationKey[] = [
+    'playBegins',
+    'letsGo',
+    'bestOfLuck',
+    'goodLuck',
+    'matchBegins',
+  ];
+  const closing = t(randomPick(closingPhrases), lang);
+
+  speak(`${playerA} ${t('versus', lang)} ${playerB}... ${server} ${t('toServe', lang)}... ${closing}`, 'calm');
 }

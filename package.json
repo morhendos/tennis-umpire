@@ -11,6 +11,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "build:apk": "bash build-apk.sh",
+    "install:apk": "bash install-apk.sh",
     "build:eas": "eas build --platform android --profile preview",
     "build:eas:ios": "eas build --platform ios --profile preview",
     "prebuild": "expo prebuild",

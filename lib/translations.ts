@@ -57,6 +57,11 @@ export const translations = {
 
     // Match start
     versus: 'versus',
+    playBegins: 'Play.',
+    letsGo: 'Let\'s go.',
+    bestOfLuck: 'Best of luck.',
+    goodLuck: 'Good luck.',
+    matchBegins: 'The match begins.',
   },
   
   es: {
@@ -116,6 +121,11 @@ export const translations = {
 
     // Match start
     versus: 'contra',
+    playBegins: 'Juego.',
+    letsGo: 'Vamos.',
+    bestOfLuck: 'Buena suerte.',
+    goodLuck: 'Buena suerte a ambos.',
+    matchBegins: 'Comienza el partido.',
   },
   
   fr: {
@@ -175,6 +185,11 @@ export const translations = {
 
     // Match start
     versus: 'contre',
+    playBegins: 'Jeu.',
+    letsGo: 'C\'est parti.',
+    bestOfLuck: 'Bonne chance.',
+    goodLuck: 'Bonne chance à tous les deux.',
+    matchBegins: 'Le match commence.',
   },
   
   it: {
@@ -234,6 +249,11 @@ export const translations = {
 
     // Match start
     versus: 'contro',
+    playBegins: 'Gioco.',
+    letsGo: 'Si comincia.',
+    bestOfLuck: 'Buona fortuna.',
+    goodLuck: 'In bocca al lupo.',
+    matchBegins: 'Inizia la partita.',
   },
 };
 

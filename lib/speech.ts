@@ -962,7 +962,7 @@ export function announceFullScore(state: MatchState) {
   if (completedSets.length > 0) {
     for (let i = 0; i < completedSets.length; i++) {
       const label = t(setOrdinals[i], lang);
-      parts.push(`${label} ${completedSets[i].A}-${completedSets[i].B}`);
+      parts.push(`${label}... ${completedSets[i].A}-${completedSets[i].B}`);
     }
   }
 
@@ -972,11 +972,11 @@ export function announceFullScore(state: MatchState) {
   const totalGames = games.A + games.B;
   if (totalGames > 0) {
     if (games.A === games.B) {
-      parts.push(`${currentSetLabel} ${games.A} ${t('gamesAll', lang)}`);
+      parts.push(`${currentSetLabel}... ${games.A} ${t('gamesAll', lang)}`);
     } else {
       const leader = games.A > games.B ? 'A' : 'B';
       const trailer = leader === 'A' ? 'B' : 'A';
-      parts.push(`${currentSetLabel} ${players[leader].name} ${t('leads', lang)} ${games[leader]}-${games[trailer]}`);
+      parts.push(`${currentSetLabel}... ${players[leader].name} ${t('leads', lang)} ${games[leader]}-${games[trailer]}`);
     }
   }
 

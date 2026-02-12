@@ -25,6 +25,9 @@ let inBreakMode = false;
 let speakDebounceTimer: NodeJS.Timeout | null = null;
 const DEBOUNCE_MS = 300; // Wait 300ms before speaking
 
+// Generation counter to prevent stale API responses from playing
+let speakGeneration = 0;
+
 // Delay before releasing audio focus after announcement finishes
 const RELEASE_FOCUS_DELAY_MS = 2000;
 
@@ -261,6 +264,9 @@ async function findNativeVoice(langCode: string): Promise<{ id: string; lang: st
 
 // Stop any currently playing audio
 async function stopCurrentAudio() {
+  // Clear playback callback to prevent stale sounds from triggering it
+  onPlaybackFinished = null;
+  
   if (currentSound) {
     try {
       await currentSound.stopAsync();
@@ -299,17 +305,21 @@ export async function speak(text: string, style: AnnouncementStyle = 'score'): P
   await stopCurrentAudio();
   Speech.stop();
   
+  // Increment generation — any in-flight API calls from previous speak() calls
+  // will see a stale generation and skip playback
+  const gen = ++speakGeneration;
+  
   // For regular point scores, debounce to handle rapid tapping
   // Important announcements (game, set, match) play immediately
   if (style === 'score') {
     console.log(`🎤 Debouncing (${DEBOUNCE_MS}ms): "${text}"`);
     speakDebounceTimer = setTimeout(() => {
       speakDebounceTimer = null;
-      speakInternal(text, style);
+      speakInternal(text, style, gen);
     }, DEBOUNCE_MS);
   } else {
     // Important announcements - play immediately
-    await speakInternal(text, style);
+    await speakInternal(text, style, gen);
   }
 }
 
@@ -317,7 +327,13 @@ export async function speak(text: string, style: AnnouncementStyle = 'score'): P
 let onPlaybackFinished: (() => void) | null = null;
 
 // Internal speak function - does the actual TTS work
-async function speakInternal(text: string, style: AnnouncementStyle): Promise<void> {
+async function speakInternal(text: string, style: AnnouncementStyle, gen: number): Promise<void> {
+  // Check if this request is still current (not superseded by a newer speak() call)
+  if (gen !== speakGeneration) {
+    console.log(`🚫 Skipping stale speak (gen ${gen}, current ${speakGeneration}): "${text}"`);
+    return;
+  }
+  
   const { 
     settings, 
     googleSettings,
@@ -326,7 +342,7 @@ async function speakInternal(text: string, style: AnnouncementStyle): Promise<vo
     googleApiKey,
   } = useVoiceStore.getState();
   
-  console.log(`🎤 Speaking (${voiceEngine}, ${style}): "${text}"`);
+  console.log(`🎤 Speaking (${voiceEngine}, ${style}, gen ${gen}): "${text}"`);
   
   // Native TTS
   if (voiceEngine === 'native') {
@@ -339,7 +355,7 @@ async function speakInternal(text: string, style: AnnouncementStyle): Promise<vo
     if (googleApiKey) {
       try {
         const ssml = wrapInSSML(text, style);
-        await speakWithGoogle(ssml, googleSettings, googleApiKey, true);
+        await speakWithGoogle(ssml, googleSettings, googleApiKey, true, gen);
         console.log('✅ Google TTS success');
         return;
       } catch (error) {
@@ -358,7 +374,7 @@ async function speakInternal(text: string, style: AnnouncementStyle): Promise<vo
   if (voiceEngine === 'elevenlabs') {
     if (elevenLabsApiKey) {
       try {
-        await speakWithElevenLabs(text, settings, elevenLabsApiKey);
+        await speakWithElevenLabs(text, settings, elevenLabsApiKey, gen);
         console.log('✅ ElevenLabs success');
         return;
       } catch (error) {
@@ -378,7 +394,7 @@ async function speakInternal(text: string, style: AnnouncementStyle): Promise<vo
 }
 
 // Google Cloud TTS - now supports SSML
-async function speakWithGoogle(text: string, settings: any, apiKey: string, isSSML: boolean = false): Promise<void> {
+async function speakWithGoogle(text: string, settings: any, apiKey: string, isSSML: boolean = false, gen?: number): Promise<void> {
   console.log('🔄 Calling Google Cloud TTS...');
   if (isSSML) {
     console.log('📝 Using SSML:', text);
@@ -437,6 +453,12 @@ async function speakWithGoogle(text: string, settings: any, apiKey: string, isSS
     throw new Error('No audio content in response');
   }
 
+  // Check if this request is still current after async API call
+  if (gen !== undefined && gen !== speakGeneration) {
+    console.log(`🚫 Google TTS response arrived but gen ${gen} is stale (current: ${speakGeneration}), skipping playback`);
+    return;
+  }
+
   const uri = `data:audio/mp3;base64,${data.audioContent}`;
 
   const { sound } = await Audio.Sound.createAsync(
@@ -466,7 +488,7 @@ async function speakWithGoogle(text: string, settings: any, apiKey: string, isSS
 }
 
 // ElevenLabs TTS
-async function speakWithElevenLabs(text: string, settings: any, apiKey: string): Promise<void> {
+async function speakWithElevenLabs(text: string, settings: any, apiKey: string, gen?: number): Promise<void> {
   console.log('🔄 Calling ElevenLabs API...');
   
   await stopCurrentAudio();
@@ -503,6 +525,12 @@ async function speakWithElevenLabs(text: string, settings: any, apiKey: string):
 
   const arrayBuffer = await response.arrayBuffer();
   console.log(`📦 Received ${arrayBuffer.byteLength} bytes`);
+  
+  // Check if this request is still current after async API call
+  if (gen !== undefined && gen !== speakGeneration) {
+    console.log(`🚫 ElevenLabs response arrived but gen ${gen} is stale (current: ${speakGeneration}), skipping playback`);
+    return;
+  }
   
   const base64 = arrayBufferToBase64(arrayBuffer);
   const uri = `data:audio/mpeg;base64,${base64}`;

@@ -22,7 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { getMatchStatus, getSetsWon } from '@/lib/scoring';
-import { isMusicPlaying, fadeOutAndStop } from '@/lib/breakMusic';
+import { cancelServeTimer } from '@/lib/speech';
 import { useColors, AppColors } from '@/constants/colors';
 import { AnimatedScore, ServeIndicator, IconButton } from '@/components/ui';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
@@ -78,10 +78,8 @@ export function MatchScreen({
   };
 
   const handleScoreboardLongPress = () => {
-    if (isMusicPlaying()) {
-      console.log('🔇 Long press: silencing break music');
-      fadeOutAndStop(500);
-    }
+    console.log('⏭️ Long press: ending break, resuming play');
+    cancelServeTimer();
   };
 
   const insets = useSafeAreaInsets();

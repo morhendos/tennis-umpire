@@ -262,6 +262,35 @@ async function findNativeVoice(langCode: string): Promise<{ id: string; lang: st
   return null;
 }
 
+// Secondary sound for stadium echo effect
+let echoSound: Audio.Sound | null = null;
+
+// Play a delayed, quieter copy of the audio for stadium echo effect
+function playEcho(uri: string, delayMs: number = 120, volume: number = 0.3) {
+  setTimeout(async () => {
+    try {
+      // Clean up previous echo if still playing
+      if (echoSound) {
+        try { await echoSound.stopAsync(); await echoSound.unloadAsync(); } catch (_) {}
+        echoSound = null;
+      }
+      const { sound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: true, volume }
+      );
+      echoSound = sound;
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+          if (echoSound === sound) echoSound = null;
+        }
+      });
+    } catch (e) {
+      console.log('⚠️ Echo playback failed:', e);
+    }
+  }, delayMs);
+}
+
 // Stop any currently playing audio
 async function stopCurrentAudio() {
   // Clear playback callback to prevent stale sounds from triggering it
@@ -275,6 +304,11 @@ async function stopCurrentAudio() {
       // Ignore errors when stopping
     }
     currentSound = null;
+  }
+  // Also stop any echo
+  if (echoSound) {
+    try { await echoSound.stopAsync(); await echoSound.unloadAsync(); } catch (_) {}
+    echoSound = null;
   }
 }
 
@@ -470,6 +504,11 @@ async function speakWithGoogle(text: string, settings: any, apiKey: string, isSS
 
   currentSound = sound;
 
+  // Stadium echo effect
+  if (useVoiceStore.getState().stadiumEcho) {
+    playEcho(uri);
+  }
+
   sound.setOnPlaybackStatusUpdate((status) => {
     if (status.isLoaded && status.didJustFinish) {
       console.log('✅ Playback finished');
@@ -586,6 +625,11 @@ async function speakWithElevenLabs(text: string, settings: any, apiKey: string, 
   console.log('🔊 Playing sound...');
 
   currentSound = sound;
+
+  // Stadium echo effect
+  if (useVoiceStore.getState().stadiumEcho) {
+    playEcho(uri);
+  }
 
   sound.setOnPlaybackStatusUpdate((status) => {
     if (status.isLoaded && status.didJustFinish) {

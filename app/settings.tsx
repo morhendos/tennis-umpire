@@ -83,6 +83,7 @@ export default function SettingsScreen() {
     googleSettings,
     language,
     audioEnabled,
+    stadiumEcho,
     voiceEngine,
     elevenLabsApiKey,
     googleApiKey,
@@ -95,6 +96,7 @@ export default function SettingsScreen() {
     setGoogleSpeakingRate,
     setGooglePitch,
     setAudioEnabled,
+    setStadiumEcho,
     setLanguage,
     setVoiceEngine,
     setElevenLabsApiKey,
@@ -192,6 +194,27 @@ export default function SettingsScreen() {
               />
             </View>
           </View>
+
+          {/* Stadium Echo */}
+          {audioEnabled && (
+            <View style={[styles.cell, { borderBottomColor: c.muted + '10' }]}>
+              <View style={styles.row}>
+                <View style={styles.rowInfo}>
+                  <Ionicons name="megaphone-outline" size={22} color={c.gold} />
+                  <View>
+                    <Text style={[styles.label, { color: c.white }]}>Stadium Echo</Text>
+                    <Text style={[{ fontSize: 11, color: c.muted, marginTop: 2 }]}>Outdoor PA announcer feel</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={stadiumEcho}
+                  onValueChange={setStadiumEcho}
+                  trackColor={{ false: c.muted, true: c.gold }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+            </View>
+          )}
 
           {/* Voice Engine Selector */}
           <View style={[styles.cell, { borderBottomColor: c.muted + '10' }]}>

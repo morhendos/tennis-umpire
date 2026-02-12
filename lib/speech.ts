@@ -374,7 +374,7 @@ async function speakInternal(text: string, style: AnnouncementStyle, gen: number
   if (voiceEngine === 'elevenlabs') {
     if (elevenLabsApiKey) {
       try {
-        await speakWithElevenLabs(text, settings, elevenLabsApiKey, gen);
+        await speakWithElevenLabs(text, settings, elevenLabsApiKey, gen, style);
         console.log('✅ ElevenLabs success');
         return;
       } catch (error) {
@@ -487,8 +487,42 @@ async function speakWithGoogle(text: string, settings: any, apiKey: string, isSS
   });
 }
 
+// ============================================
+// ElevenLabs style adjustments
+// ============================================
+// Adjust voice_settings per announcement style for dramatic variation.
+// Values are offsets applied to the user's base settings (clamped 0–1).
+const ELEVENLABS_STYLE_OFFSETS: Record<AnnouncementStyle, {
+  stabilityOffset: number;
+  styleOffset: number;
+}> = {
+  score:    { stabilityOffset:  0,    styleOffset:  0    },  // User defaults — calm, routine
+  game:     { stabilityOffset: -0.05, styleOffset: +0.10 },  // Slightly more energy
+  set:      { stabilityOffset: -0.10, styleOffset: +0.20 },  // Dramatic
+  match:    { stabilityOffset: -0.15, styleOffset: +0.30 },  // Maximum drama
+  dramatic: { stabilityOffset: -0.10, styleOffset: +0.25 },  // Set/match point tension
+  calm:     { stabilityOffset: +0.10, styleOffset: -0.10 },  // Neutral, measured
+};
+
+function clamp(v: number, min = 0, max = 1) { return Math.min(max, Math.max(min, v)); }
+
+// Prepare text for ElevenLabs: convert umpire-style `...` separators into
+// proper sentence breaks so the model treats each part as a distinct statement.
+function prepareTextForElevenLabs(text: string): string {
+  // Replace "..." pause markers with period + space (firm sentence end)
+  let prepared = text.replace(/\.\.\./g, '.');
+  // Collapse multiple periods from replacements like ". ." 
+  prepared = prepared.replace(/\.\s*\./g, '.');
+  // Ensure the text ends with punctuation so ElevenLabs closes the statement
+  prepared = prepared.trim();
+  if (!/[.!?]$/.test(prepared)) {
+    prepared += '.';
+  }
+  return prepared;
+}
+
 // ElevenLabs TTS
-async function speakWithElevenLabs(text: string, settings: any, apiKey: string, gen?: number): Promise<void> {
+async function speakWithElevenLabs(text: string, settings: any, apiKey: string, gen?: number, style: AnnouncementStyle = 'score'): Promise<void> {
   console.log('🔄 Calling ElevenLabs API...');
   
   await stopCurrentAudio();
@@ -496,7 +530,16 @@ async function speakWithElevenLabs(text: string, settings: any, apiKey: string, 
   const lang = getLang();
   const modelId = lang === 'en' ? 'eleven_flash_v2_5' : 'eleven_multilingual_v2';
   
+  // Apply per-style adjustments to user's base settings
+  const offsets = ELEVENLABS_STYLE_OFFSETS[style] || ELEVENLABS_STYLE_OFFSETS.score;
+  const adjustedStability = clamp(settings.stability + offsets.stabilityOffset);
+  const adjustedStyle = clamp(settings.style + offsets.styleOffset);
+  
+  // Prepare text for ElevenLabs (proper sentence breaks)
+  const preparedText = prepareTextForElevenLabs(text);
+  
   console.log(`🌍 Using model: ${modelId} for language: ${lang}`);
+  console.log(`🎭 Style: ${style} → stability: ${adjustedStability.toFixed(2)}, excitement: ${adjustedStyle.toFixed(2)}`);
 
   const response = await fetch(`${ELEVENLABS_API_URL}/${settings.voiceId}`, {
     method: 'POST',
@@ -506,12 +549,12 @@ async function speakWithElevenLabs(text: string, settings: any, apiKey: string, 
       'xi-api-key': apiKey,
     },
     body: JSON.stringify({
-      text,
+      text: preparedText,
       model_id: modelId,
       voice_settings: {
-        stability: settings.stability,
+        stability: adjustedStability,
         similarity_boost: settings.similarityBoost,
-        style: settings.style,
+        style: adjustedStyle,
         use_speaker_boost: settings.useSpeakerBoost,
       },
     }),

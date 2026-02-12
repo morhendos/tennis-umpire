@@ -8,6 +8,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Alert,
 } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 
@@ -51,6 +52,22 @@ export function MatchScreen({
   useKeepAwake();
 
   const [showManualButtons, setShowManualButtons] = useState(false);
+
+  const handleNewMatch = () => {
+    // Skip confirmation if match is already complete
+    if (match.isComplete) {
+      onResetMatch();
+      return;
+    }
+    Alert.alert(
+      'New Match',
+      'Are you sure you want to end the current match and start a new one?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'New Match', style: 'destructive', onPress: onResetMatch },
+      ]
+    );
+  };
 
   const toggleManualButtons = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -251,7 +268,7 @@ export function MatchScreen({
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.lsbControlBtn}
-                    onPress={onResetMatch}
+                    onPress={handleNewMatch}
                   >
                     <Ionicons name="refresh" size={16} color={COLORS.silver} />
                   </TouchableOpacity>
@@ -632,7 +649,7 @@ export function MatchScreen({
 
           <TouchableOpacity 
             style={styles.controlBtn} 
-            onPress={onResetMatch}
+            onPress={handleNewMatch}
             activeOpacity={0.7}
           >
             <Ionicons name="refresh" size={20} color={COLORS.silver} />

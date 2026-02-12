@@ -8,8 +8,8 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Alert,
   Pressable,
+  Modal,
 } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 
@@ -57,20 +57,19 @@ export function MatchScreen({
   const c = useColors();
 
   const [showManualButtons, setShowManualButtons] = useState(false);
+  const [showNewMatchModal, setShowNewMatchModal] = useState(false);
 
   const handleNewMatch = () => {
     if (match.isComplete) {
       onResetMatch();
       return;
     }
-    Alert.alert(
-      'New Match',
-      'Are you sure you want to end the current match and start a new one?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'New Match', style: 'destructive', onPress: onResetMatch },
-      ]
-    );
+    setShowNewMatchModal(true);
+  };
+
+  const confirmNewMatch = () => {
+    setShowNewMatchModal(false);
+    onResetMatch();
   };
 
   const toggleManualButtons = () => {
@@ -94,12 +93,52 @@ export function MatchScreen({
   const breakSecondsLeft = useBreakTimerStore(s => s.secondsLeft);
   const breakLabel = useBreakTimerStore(s => s.label);
 
+  // Shared confirmation modal
+  const newMatchModal = (
+    <Modal
+      visible={showNewMatchModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowNewMatchModal(false)}
+    >
+      <Pressable style={styles.modalOverlay} onPress={() => setShowNewMatchModal(false)}>
+        <Pressable style={[styles.modalContent, { backgroundColor: c.bgCard, borderColor: c.muted + '20' }]}>
+          <View style={styles.modalIconWrap}>
+            <Ionicons name="alert-circle-outline" size={36} color={c.red} />
+          </View>
+          <Text style={[styles.modalTitle, { color: c.white }]}>End Current Match?</Text>
+          <Text style={[styles.modalMessage, { color: c.muted }]}>
+            This match is still in progress. Starting a new match will discard the current one.
+          </Text>
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalBtn, { backgroundColor: c.bgSecondary, borderColor: c.muted + '30' }]}
+              onPress={() => setShowNewMatchModal(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.modalBtnText, { color: c.silver }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalBtn, styles.modalBtnDestructive, { backgroundColor: c.red + '15', borderColor: c.red + '40' }]}
+              onPress={confirmNewMatch}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="refresh" size={16} color={c.red} />
+              <Text style={[styles.modalBtnText, { color: c.red }]}>New Match</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+
   // ═══════════════════════════════════════════════
   // LANDSCAPE LAYOUT
   // ═══════════════════════════════════════════════
   if (isLandscape) {
     return (
       <ScreenWrapper showCourtLines={false} colors={c}>
+        {newMatchModal}
         <View style={[styles.landscapeContent, { 
           paddingTop: insets.top + 8, 
           paddingBottom: insets.bottom + 8,
@@ -363,6 +402,7 @@ export function MatchScreen({
   // ═══════════════════════════════════════════════
   return (
     <ScreenWrapper showCourtLines={false} colors={c}>
+      {newMatchModal}
       <View style={[styles.safeContent, { 
         paddingTop: insets.top, 
         paddingBottom: insets.bottom + 8,
@@ -708,6 +748,57 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     fontVariant: ['tabular-nums'] as any,
+  },
+
+  // Confirmation Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 28,
+    alignItems: 'center',
+  },
+  modalIconWrap: {
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 6,
+  },
+  modalBtnDestructive: {},
+  modalBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 
   // Scoreboard

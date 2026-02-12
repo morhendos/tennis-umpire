@@ -9,6 +9,7 @@ import {
   Platform,
   UIManager,
   Alert,
+  Pressable,
 } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 
@@ -21,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { getMatchStatus, getSetsWon } from '@/lib/scoring';
+import { isMusicPlaying, fadeOutAndStop } from '@/lib/breakMusic';
 import { useColors, AppColors } from '@/constants/colors';
 import { AnimatedScore, ServeIndicator, IconButton } from '@/components/ui';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
@@ -75,6 +77,13 @@ export function MatchScreen({
     setShowManualButtons(prev => !prev);
   };
 
+  const handleScoreboardLongPress = () => {
+    if (isMusicPlaying()) {
+      console.log('🔇 Long press: silencing break music');
+      fadeOutAndStop(500);
+    }
+  };
+
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -120,7 +129,7 @@ export function MatchScreen({
             ) : null}
 
             {/* Center: TV-Style Scoreboard */}
-            <View style={styles.landscapeScoreboard}>
+            <Pressable style={styles.landscapeScoreboard} onLongPress={handleScoreboardLongPress}>
               <LinearGradient
                 colors={[c.bgCard, c.bgSecondary]}
                 style={[styles.landscapeScoreboardGradient, { borderColor: c.muted + '15' }]}
@@ -278,7 +287,7 @@ export function MatchScreen({
                   </TouchableOpacity>
                 </View>
               </LinearGradient>
-            </View>
+            </Pressable>
 
             {/* Right: Player B Score Button OR Manual Panel */}
             {match.isComplete ? (
@@ -382,7 +391,7 @@ export function MatchScreen({
         )}
 
         {/* Main Scoreboard */}
-        <View style={styles.scoreboardArea}>
+        <Pressable style={styles.scoreboardArea} onLongPress={handleScoreboardLongPress}>
           <LinearGradient
             colors={[c.bgCard, c.bgSecondary]}
             style={[styles.scoreboard, { borderColor: c.muted + '15' }]}
@@ -479,7 +488,7 @@ export function MatchScreen({
               </View>
             )}
           </LinearGradient>
-        </View>
+        </Pressable>
 
         {/* Score Area */}
         {match.isComplete ? (

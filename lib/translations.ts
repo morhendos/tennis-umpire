@@ -38,6 +38,9 @@ export const translations = {
     setBreak: 'Set break',
     twoMinuteBreak: 'Two minute break',
     seconds: 'seconds',
+    ninetySeconds: 'Ninety seconds',
+    ninetySecondBreak: 'Ninety second break',
+    oneAndAHalfMinutes: 'One and a half minutes',
     
     // Tiebreak
     tiebreak: 'Tiebreak',
@@ -94,6 +97,9 @@ export const translations = {
     setBreak: 'Descanso de set',
     twoMinuteBreak: 'Dos minutos de descanso',
     seconds: 'segundos',
+    ninetySeconds: 'Noventa segundos',
+    ninetySecondBreak: 'Noventa segundos de descanso',
+    oneAndAHalfMinutes: 'Minuto y medio',
     
     // Tiebreak - "Muerte súbita" or "Tiebreak" both used
     tiebreak: 'Muerte súbita',
@@ -150,6 +156,9 @@ export const translations = {
     setBreak: 'Pause entre les sets',
     twoMinuteBreak: 'Deux minutes de pause',
     seconds: 'secondes',
+    ninetySeconds: 'Quatre-vingt-dix secondes',
+    ninetySecondBreak: 'Quatre-vingt-dix secondes de pause',
+    oneAndAHalfMinutes: 'Une minute et demie',
     
     // Tiebreak - French term
     tiebreak: 'Jeu décisif',
@@ -206,6 +215,9 @@ export const translations = {
     setBreak: 'Pausa tra i set',
     twoMinuteBreak: 'Due minuti di pausa',
     seconds: 'secondi',
+    ninetySeconds: 'Novanta secondi',
+    ninetySecondBreak: 'Novanta secondi di pausa',
+    oneAndAHalfMinutes: 'Un minuto e mezzo',
     
     // Tiebreak - commonly used in Italian
     tiebreak: 'Tiebreak',

@@ -871,7 +871,14 @@ export async function announceGameWon(winner: 'A' | 'B', state: MatchState) {
     if (isFirstChangeover) {
       announcement += `... ${changeoverPhrase}... ${nextServerName} ${t('toServe', lang)}`;
     } else {
-      announcement += `... ${changeoverPhrase}, 90 ${t('seconds', lang)}`;
+      const durationPhrases = [
+        t('ninetySeconds', lang),
+        t('ninetySecondBreak', lang),
+        t('oneAndAHalfMinutes', lang),
+        `90 ${t('seconds', lang)}`,
+      ];
+      const durationPhrase = randomPick(durationPhrases);
+      announcement += `... ${changeoverPhrase}... ${durationPhrase}`;
       await speak(announcement, 'game');
       enterBreakMode();
       scheduleServeAnnouncement(nextServerName, 90);
@@ -905,13 +912,13 @@ export async function announceSetWon(
     announcement = `${t('set', lang)} ${winnerName}... ${gameScoreWord(winnerGames)} ${t('gamesTo', lang)} ${gameScoreWord(loserGames)}`;
   }
   
-  const breakPhrases = [
-    t('setBreak', lang),
-    t('twoMinuteBreak', lang),
-    `120 ${t('seconds', lang)}`,
+  // Varied set break announcements — label + duration as separate sentences
+  const setBreakAnnouncements = [
+    `${t('setBreak', lang)}... ${t('twoMinuteBreak', lang)}`,
+    `${t('setBreak', lang)}... 120 ${t('seconds', lang)}`,
+    `${t('twoMinuteBreak', lang)}`,
   ];
-  const breakPhrase = randomPick(breakPhrases);
-  announcement += `... ${breakPhrase}`;
+  announcement += `... ${randomPick(setBreakAnnouncements)}`;
   
   await speak(announcement, 'set');
   enterBreakMode();

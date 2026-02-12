@@ -730,6 +730,16 @@ export async function getAvailableVoices(): Promise<Speech.Voice[]> {
   return cachedVoices;
 }
 
+// Format game/set score number for speech
+// In English tennis, 0 games is announced as "love" (e.g. "6-love", "leads 2-love")
+function gameScoreWord(n: number): string {
+  if (n === 0) {
+    const lang = getLang();
+    return t('love', lang);
+  }
+  return String(n);
+}
+
 // Format point for speech
 function pointToWord(point: number | string): string {
   const lang = getLang();
@@ -837,16 +847,16 @@ export async function announceGameWon(winner: 'A' | 'B', state: MatchState) {
     announcement = `${t('game', lang)} ${winnerName}... ${winnerGames} ${t('gamesAll', lang)}`;
   } else if (winnerGames > loserGames) {
     if (scoreStyle < 0.5) {
-      announcement = `${t('game', lang)} ${winnerName}... ${winnerName} ${t('leads', lang)} ${winnerGames} ${t('gamesTo', lang)} ${loserGames}`;
+      announcement = `${t('game', lang)} ${winnerName}... ${winnerName} ${t('leads', lang)} ${gameScoreWord(winnerGames)} ${t('gamesTo', lang)} ${gameScoreWord(loserGames)}`;
     } else {
-      announcement = `${t('game', lang)} ${winnerName}... ${winnerGames} ${loserGames}`;
+      announcement = `${t('game', lang)} ${winnerName}... ${gameScoreWord(winnerGames)} ${gameScoreWord(loserGames)}`;
     }
   } else {
     const leaderName = players[loser].name;
     if (scoreStyle < 0.5) {
-      announcement = `${t('game', lang)} ${winnerName}... ${leaderName} ${t('leads', lang)} ${loserGames} ${t('gamesTo', lang)} ${winnerGames}`;
+      announcement = `${t('game', lang)} ${winnerName}... ${leaderName} ${t('leads', lang)} ${gameScoreWord(loserGames)} ${t('gamesTo', lang)} ${gameScoreWord(winnerGames)}`;
     } else {
-      announcement = `${t('game', lang)} ${winnerName}... ${winnerGames} ${loserGames}`;
+      announcement = `${t('game', lang)} ${winnerName}... ${gameScoreWord(winnerGames)} ${gameScoreWord(loserGames)}`;
     }
   }
 
@@ -890,9 +900,9 @@ export async function announceSetWon(
   
   let announcement = '';
   if (style < 0.5) {
-    announcement = `${t('gameAndSet', lang)}, ${winnerName}... ${winnerGames} ${loserGames}`;
+    announcement = `${t('gameAndSet', lang)}, ${winnerName}... ${gameScoreWord(winnerGames)} ${gameScoreWord(loserGames)}`;
   } else {
-    announcement = `${t('set', lang)} ${winnerName}... ${winnerGames} ${t('gamesTo', lang)} ${loserGames}`;
+    announcement = `${t('set', lang)} ${winnerName}... ${gameScoreWord(winnerGames)} ${t('gamesTo', lang)} ${gameScoreWord(loserGames)}`;
   }
   
   const breakPhrases = [
@@ -969,7 +979,7 @@ export function announceFullScore(state: MatchState) {
   if (completedSets.length > 0) {
     for (let i = 0; i < completedSets.length; i++) {
       const label = t(setOrdinals[i], lang);
-      parts.push(`${label}... ${completedSets[i].A}-${completedSets[i].B}`);
+      parts.push(`${label}... ${gameScoreWord(completedSets[i].A)}-${gameScoreWord(completedSets[i].B)}`);
     }
   }
 
@@ -983,7 +993,7 @@ export function announceFullScore(state: MatchState) {
     } else {
       const leader = games.A > games.B ? 'A' : 'B';
       const trailer = leader === 'A' ? 'B' : 'A';
-      parts.push(`${currentSetLabel}... ${players[leader].name} ${t('leads', lang)} ${games[leader]}-${games[trailer]}`);
+      parts.push(`${currentSetLabel}... ${players[leader].name} ${t('leads', lang)} ${gameScoreWord(games[leader])}-${gameScoreWord(games[trailer])}`);
     }
   }
 

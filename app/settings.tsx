@@ -84,7 +84,8 @@ export default function SettingsScreen() {
     language,
     audioEnabled,
     stadiumEcho,
-    echoIntensity,
+    echoDelay,
+    echoVolume,
     voiceEngine,
     elevenLabsApiKey,
     googleApiKey,
@@ -98,7 +99,8 @@ export default function SettingsScreen() {
     setGooglePitch,
     setAudioEnabled,
     setStadiumEcho,
-    setEchoIntensity,
+    setEchoDelay,
+    setEchoVolume,
     setLanguage,
     setVoiceEngine,
     setElevenLabsApiKey,
@@ -219,14 +221,27 @@ export default function SettingsScreen() {
                 <View style={[styles.sliderGroup, { backgroundColor: c.bgCard, marginTop: 12 }]}>
                   <View style={styles.sliderRow}>
                     <View style={styles.sliderHeader}>
-                      <Text style={[styles.sliderLabel, { color: c.silver }]}>Intensity</Text>
-                      <Text style={[styles.sliderValue, { color: c.gold }]}>{echoIntensity.toFixed(2)}</Text>
+                      <Text style={[styles.sliderLabel, { color: c.silver }]}>Delay</Text>
+                      <Text style={[styles.sliderValue, { color: c.gold }]}>{Math.round(echoDelay)}ms</Text>
                     </View>
-                    <Text style={[styles.sliderHint, { color: c.muted }]}>Subtle whisper → Full stadium PA</Text>
+                    <Text style={[styles.sliderHint, { color: c.muted }]}>Short → longer gap before echo</Text>
                     <Slider
                       style={styles.slider}
-                      minimumValue={0} maximumValue={1} step={0.05}
-                      value={echoIntensity} onValueChange={setEchoIntensity}
+                      minimumValue={50} maximumValue={300} step={10}
+                      value={echoDelay} onValueChange={setEchoDelay}
+                      minimumTrackTintColor={c.gold} maximumTrackTintColor={c.muted} thumbTintColor={c.gold}
+                    />
+                  </View>
+                  <View style={styles.sliderRow}>
+                    <View style={styles.sliderHeader}>
+                      <Text style={[styles.sliderLabel, { color: c.silver }]}>Volume</Text>
+                      <Text style={[styles.sliderValue, { color: c.gold }]}>{Math.round(echoVolume * 100)}%</Text>
+                    </View>
+                    <Text style={[styles.sliderHint, { color: c.muted }]}>Quiet whisper → loud reflection</Text>
+                    <Slider
+                      style={styles.slider}
+                      minimumValue={0.05} maximumValue={0.60} step={0.05}
+                      value={echoVolume} onValueChange={setEchoVolume}
                       minimumTrackTintColor={c.gold} maximumTrackTintColor={c.muted} thumbTintColor={c.gold}
                     />
                   </View>

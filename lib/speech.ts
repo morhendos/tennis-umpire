@@ -265,15 +265,12 @@ async function findNativeVoice(langCode: string): Promise<{ id: string; lang: st
 // Secondary sound for stadium echo effect
 let echoSound: Audio.Sound | null = null;
 
-// Trigger stadium echo if enabled, using intensity from settings
+// Trigger stadium echo if enabled, using delay + volume from settings
 function triggerEchoIfEnabled(uri: string) {
-  const { stadiumEcho, echoIntensity } = useVoiceStore.getState();
+  const { stadiumEcho, echoDelay, echoVolume } = useVoiceStore.getState();
   if (!stadiumEcho) return;
-  // intensity 0 → delay 60ms, vol 0.10  |  intensity 1 → delay 180ms, vol 0.45
-  const delayMs = 60 + echoIntensity * 120;
-  const volume = 0.10 + echoIntensity * 0.35;
-  console.log(`🏟️ Echo: intensity ${echoIntensity.toFixed(2)} → delay ${delayMs.toFixed(0)}ms, vol ${volume.toFixed(2)}`);
-  playEcho(uri, delayMs, volume);
+  console.log(`🏟️ Echo: delay ${echoDelay}ms, vol ${echoVolume.toFixed(2)}`);
+  playEcho(uri, echoDelay, echoVolume);
 }
 
 // Play a delayed, quieter copy of the audio for stadium echo effect

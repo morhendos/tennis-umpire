@@ -23,6 +23,7 @@ import {
   VoiceEngine 
 } from '@/lib/voiceStore';
 import { speak, getAvailableVoices } from '@/lib/speech';
+import { updateVolume as updateBreakMusicVolume } from '@/lib/breakMusic';
 import { useColors, AppColors } from '@/constants/colors';
 import { useThemeStore } from '@/lib/themeStore';
 
@@ -86,6 +87,8 @@ export default function SettingsScreen() {
     stadiumEcho,
     echoDelay,
     echoVolume,
+    breakMusicEnabled,
+    breakMusicVolume,
     voiceEngine,
     elevenLabsApiKey,
     googleApiKey,
@@ -101,6 +104,8 @@ export default function SettingsScreen() {
     setStadiumEcho,
     setEchoDelay,
     setEchoVolume,
+    setBreakMusicEnabled,
+    setBreakMusicVolume,
     setLanguage,
     setVoiceEngine,
     setElevenLabsApiKey,
@@ -243,6 +248,44 @@ export default function SettingsScreen() {
                       minimumValue={0.05} maximumValue={0.60} step={0.05}
                       value={echoVolume} onValueChange={setEchoVolume}
                       minimumTrackTintColor={c.gold} maximumTrackTintColor={c.muted} thumbTintColor={c.gold}
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Break Music */}
+          {audioEnabled && (
+            <View style={[styles.cell, { borderBottomColor: c.muted + '10' }]}>
+              <View style={styles.row}>
+                <View style={styles.rowInfo}>
+                  <Ionicons name="musical-notes-outline" size={22} color={c.blue} />
+                  <View>
+                    <Text style={[styles.label, { color: c.white }]}>Break Music</Text>
+                    <Text style={[{ fontSize: 11, color: c.muted, marginTop: 2 }]}>Play during changeovers &amp; set breaks</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={breakMusicEnabled}
+                  onValueChange={setBreakMusicEnabled}
+                  trackColor={{ false: c.muted, true: c.blue }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+              {breakMusicEnabled && (
+                <View style={[styles.sliderGroup, { backgroundColor: c.bgCard, marginTop: 12 }]}>
+                  <View style={styles.sliderRow}>
+                    <View style={styles.sliderHeader}>
+                      <Text style={[styles.sliderLabel, { color: c.silver }]}>Volume</Text>
+                      <Text style={[styles.sliderValue, { color: c.blue }]}>{Math.round(breakMusicVolume * 100)}%</Text>
+                    </View>
+                    <Slider
+                      style={styles.slider}
+                      minimumValue={0.05} maximumValue={0.80} step={0.05}
+                      value={breakMusicVolume}
+                      onValueChange={(v: number) => { setBreakMusicVolume(v); updateBreakMusicVolume(v); }}
+                      minimumTrackTintColor={c.blue} maximumTrackTintColor={c.muted} thumbTintColor={c.blue}
                     />
                   </View>
                 </View>

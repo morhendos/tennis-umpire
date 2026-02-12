@@ -115,6 +115,9 @@ interface VoiceStore {
   stadiumEcho: boolean;
   echoDelay: number; // ms, 50-300
   echoVolume: number; // 0-1
+  breakMusicEnabled: boolean;
+  breakMusicVolume: number; // 0-1
+  breakMusicTrack: string; // track id or 'shuffle'
   voiceEngine: VoiceEngine;
   elevenLabsApiKey: string;
   googleApiKey: string;
@@ -130,6 +133,9 @@ interface VoiceStore {
   setStadiumEcho: (value: boolean) => void;
   setEchoDelay: (value: number) => void;
   setEchoVolume: (value: number) => void;
+  setBreakMusicEnabled: (value: boolean) => void;
+  setBreakMusicVolume: (value: number) => void;
+  setBreakMusicTrack: (value: string) => void;
   setLanguage: (langCode: string) => void;
   setVoiceEngine: (engine: VoiceEngine) => void;
   setElevenLabsApiKey: (key: string) => void;
@@ -163,6 +169,9 @@ export const useVoiceStore = create<VoiceStore>()(
       stadiumEcho: false,
       echoDelay: 120,
       echoVolume: 0.30,
+      breakMusicEnabled: false,
+      breakMusicVolume: 0.25,
+      breakMusicTrack: 'shuffle',
       voiceEngine: 'google' as VoiceEngine,
       // Use env vars as defaults, can be overridden by user
       elevenLabsApiKey: ENV_ELEVENLABS_KEY,
@@ -231,6 +240,12 @@ export const useVoiceStore = create<VoiceStore>()(
       setEchoDelay: (value: number) => set({ echoDelay: value }),
 
       setEchoVolume: (value: number) => set({ echoVolume: value }),
+
+      setBreakMusicEnabled: (value: boolean) => set({ breakMusicEnabled: value }),
+
+      setBreakMusicVolume: (value: number) => set({ breakMusicVolume: value }),
+
+      setBreakMusicTrack: (value: string) => set({ breakMusicTrack: value }),
 
       setLanguage: (langCode: string) => {
         // Update Google voice to match new language

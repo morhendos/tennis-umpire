@@ -4,6 +4,7 @@ import { Alert } from 'react-native';
 import { MatchState, getMatchStatus, MatchStatus } from './scoring';
 import { useVoiceStore } from './voiceStore';
 import { t, LanguageCode, TranslationKey } from './translations';
+import { startBreakMusic, fadeOutAndStop, stopBreakMusic } from './breakMusic';
 
 // API URLs
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
@@ -200,7 +201,7 @@ function getLang(): LanguageCode {
 }
 
 // Cancel any pending serve announcement and exit break mode
-export function cancelServeTimer() {
+export async function cancelServeTimer() {
   if (serveTimer) {
     clearTimeout(serveTimer);
     serveTimer = null;
@@ -211,18 +212,25 @@ export function cancelServeTimer() {
   }
   if (inBreakMode) {
     inBreakMode = false;
+    await stopBreakMusic();
     claimAudioFocus();
   }
 }
 
 // Enter break mode — after the current announcement finishes playing,
-// release audio focus so background music resumes at full volume.
+// either start break music or release audio focus so Spotify resumes.
 function enterBreakMode() {
   inBreakMode = true;
   onPlaybackFinished = () => {
     if (inBreakMode) {
-      console.log('🎵 Break mode: announcement finished, releasing audio focus in 1s...');
-      scheduleAudioFocusRelease();
+      const { breakMusicEnabled } = useVoiceStore.getState();
+      if (breakMusicEnabled) {
+        console.log('🎵 Break mode: starting break music...');
+        startBreakMusic();
+      } else {
+        console.log('🎵 Break mode: announcement finished, releasing audio focus in 1s...');
+        scheduleAudioFocusRelease();
+      }
     }
   };
 }
@@ -340,6 +348,7 @@ export async function speak(text: string, style: AnnouncementStyle = 'score'): P
   if (inBreakMode) {
     console.log('🎵 Exiting break mode — reclaiming audio focus');
     inBreakMode = false;
+    await stopBreakMusic();
   }
   await claimAudioFocus();
   
@@ -740,8 +749,10 @@ function scheduleServeAnnouncement(serverName: string, delaySeconds: number) {
   
   console.log(`⏱️ Scheduling serve announcement in ${delaySeconds} seconds`);
   
-  serveTimer = setTimeout(() => {
+  serveTimer = setTimeout(async () => {
     serveTimer = null;
+    // Fade out break music before announcing (1 second fade)
+    await fadeOutAndStop(1000);
     // speak() will automatically reclaim audio focus and exit break mode
     speak(`${t('time', lang)}... ${serverName} ${t('toServe', lang)}`, 'calm');
   }, delaySeconds * 1000);

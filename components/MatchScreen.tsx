@@ -9,6 +9,7 @@ import {
   Platform,
   UIManager,
 } from 'react-native';
+import { useKeepAwake } from 'expo-keep-awake';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -45,6 +46,10 @@ export function MatchScreen({
   onResetMatch,
   flicActive = false,
 }: MatchScreenProps) {
+  // Keep screen awake during match — ensures TTS announcements work
+  // and Flic button presses trigger audio without OS throttling
+  useKeepAwake();
+
   const [showManualButtons, setShowManualButtons] = useState(false);
 
   const toggleManualButtons = () => {

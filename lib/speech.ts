@@ -6,6 +6,7 @@ import { useVoiceStore } from './voiceStore';
 import { t, LanguageCode, TranslationKey } from './translations';
 import { startBreakMusic, fadeOutAndStop, stopBreakMusic } from './breakMusic';
 import { useBreakTimerStore } from './breakTimerStore';
+import { getCachedAudio } from './voiceCache';
 
 // API URLs
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
@@ -330,6 +331,36 @@ async function stopCurrentAudio() {
   }
 }
 
+// Play audio from pre-cache (base64 data URI)
+async function playCachedAudio(uri: string, gen?: number): Promise<void> {
+  await stopCurrentAudio();
+  
+  if (gen !== undefined && gen !== speakGeneration) {
+    console.log(`🚫 Cached audio skipped (stale gen ${gen})`);
+    return;
+  }
+
+  const { sound } = await Audio.Sound.createAsync(
+    { uri },
+    { shouldPlay: true }
+  );
+
+  currentSound = sound;
+  triggerEchoIfEnabled(uri);
+
+  sound.setOnPlaybackStatusUpdate((status) => {
+    if (status.isLoaded && status.didJustFinish) {
+      sound.unloadAsync();
+      if (currentSound === sound) currentSound = null;
+      if (onPlaybackFinished) {
+        const cb = onPlaybackFinished;
+        onPlaybackFinished = null;
+        cb();
+      }
+    }
+  });
+}
+
 // Main speak function - with debouncing for rapid scoring
 export async function speak(text: string, style: AnnouncementStyle = 'score'): Promise<void> {
   const { audioEnabled } = useVoiceStore.getState();
@@ -397,6 +428,16 @@ async function speakInternal(text: string, style: AnnouncementStyle, gen: number
   } = useVoiceStore.getState();
   
   console.log(`🎤 Speaking (${voiceEngine}, ${style}, gen ${gen}): "${text}"`);
+  
+  // Check pre-cache first (works for Google and ElevenLabs)
+  if (voiceEngine !== 'native') {
+    const cachedUri = getCachedAudio(text);
+    if (cachedUri) {
+      console.log('⚡ Playing from pre-cache (instant)');
+      await playCachedAudio(cachedUri, gen);
+      return;
+    }
+  }
   
   // Native TTS
   if (voiceEngine === 'native') {

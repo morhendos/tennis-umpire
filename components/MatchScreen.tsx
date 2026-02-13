@@ -28,6 +28,7 @@ import { AnimatedScore, ServeIndicator, IconButton } from '@/components/ui';
 import { ScreenWrapper } from '@/components/ScreenWrapper';
 import { getStatusConfig, StatusConfig } from '@/lib/matchUtils';
 import { useBreakTimerStore, formatBreakTime } from '@/lib/breakTimerStore';
+import { useCacheStore } from '@/lib/voiceCache';
 
 interface MatchScreenProps {
   match: any;
@@ -92,6 +93,7 @@ export function MatchScreen({
   const statusConfig = getStatusConfig(status, match.players.A.name, match.players.B.name, match.tiebreak);
   const breakSecondsLeft = useBreakTimerStore(s => s.secondsLeft);
   const breakLabel = useBreakTimerStore(s => s.label);
+  const cacheStatus = useCacheStore();
 
   // Shared confirmation modal
   const newMatchModal = (
@@ -418,6 +420,11 @@ export function MatchScreen({
           />
           <View style={styles.headerCenter}>
             <Text style={[styles.headerLabel, { color: c.greenAccent }]}>LIVE MATCH</Text>
+            {cacheStatus.isGenerating && (
+              <Text style={[styles.cacheProgress, { color: c.muted }]}>
+                Caching voices {cacheStatus.completed}/{cacheStatus.total}
+              </Text>
+            )}
           </View>
           <IconButton 
             icon="settings-outline" 
@@ -715,6 +722,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 3,
+  },
+  cacheProgress: {
+    fontSize: 9,
+    fontWeight: '500',
+    marginTop: 2,
+    letterSpacing: 1,
   },
 
   // Status

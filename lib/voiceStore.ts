@@ -118,6 +118,7 @@ interface VoiceStore {
   breakMusicEnabled: boolean;
   breakMusicVolume: number; // 0-1
   breakMusicTrack: string; // track id or 'shuffle'
+  precacheEnabled: boolean; // Pre-generate all announcement audio at match start
   voiceEngine: VoiceEngine;
   elevenLabsApiKey: string;
   googleApiKey: string;
@@ -136,6 +137,7 @@ interface VoiceStore {
   setBreakMusicEnabled: (value: boolean) => void;
   setBreakMusicVolume: (value: number) => void;
   setBreakMusicTrack: (value: string) => void;
+  setPrecacheEnabled: (value: boolean) => void;
   setLanguage: (langCode: string) => void;
   setVoiceEngine: (engine: VoiceEngine) => void;
   setElevenLabsApiKey: (key: string) => void;
@@ -172,6 +174,7 @@ export const useVoiceStore = create<VoiceStore>()(
       breakMusicEnabled: false,
       breakMusicVolume: 0.25,
       breakMusicTrack: 'shuffle',
+      precacheEnabled: false,
       voiceEngine: 'google' as VoiceEngine,
       // Use env vars as defaults, can be overridden by user
       elevenLabsApiKey: ENV_ELEVENLABS_KEY,
@@ -246,6 +249,8 @@ export const useVoiceStore = create<VoiceStore>()(
       setBreakMusicVolume: (value: number) => set({ breakMusicVolume: value }),
 
       setBreakMusicTrack: (value: string) => set({ breakMusicTrack: value }),
+
+      setPrecacheEnabled: (value: boolean) => set({ precacheEnabled: value }),
 
       setLanguage: (langCode: string) => {
         // Update Google voice to match new language

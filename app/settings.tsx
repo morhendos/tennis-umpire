@@ -24,6 +24,7 @@ import {
 } from '@/lib/voiceStore';
 import { speak, getAvailableVoices } from '@/lib/speech';
 import { updateVolume as updateBreakMusicVolume } from '@/lib/breakMusic';
+import { useCacheStore } from '@/lib/voiceCache';
 import { useColors, AppColors } from '@/constants/colors';
 import { useThemeStore } from '@/lib/themeStore';
 
@@ -89,6 +90,7 @@ export default function SettingsScreen() {
     echoVolume,
     breakMusicEnabled,
     breakMusicVolume,
+    precacheEnabled,
     voiceEngine,
     elevenLabsApiKey,
     googleApiKey,
@@ -106,6 +108,7 @@ export default function SettingsScreen() {
     setEchoVolume,
     setBreakMusicEnabled,
     setBreakMusicVolume,
+    setPrecacheEnabled,
     setLanguage,
     setVoiceEngine,
     setElevenLabsApiKey,
@@ -289,6 +292,30 @@ export default function SettingsScreen() {
                     />
                   </View>
                 </View>
+              )}
+            </View>
+          )}
+
+          {/* Pre-Cache Voices */}
+          {audioEnabled && voiceEngine !== 'native' && (
+            <View style={[styles.cell, { borderBottomColor: c.muted + '10' }]}>
+              <View style={styles.row}>
+                <View style={styles.rowInfo}>
+                  <Ionicons name="flash-outline" size={22} color={c.greenAccent} />
+                  <View>
+                    <Text style={[styles.label, { color: c.white }]}>Pre-Cache Voices</Text>
+                    <Text style={[{ fontSize: 11, color: c.muted, marginTop: 2 }]}>Zero lag — generates all clips at match start</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={precacheEnabled}
+                  onValueChange={setPrecacheEnabled}
+                  trackColor={{ false: c.muted, true: c.greenAccent }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+              {precacheEnabled && (
+                <Text style={[{ fontSize: 11, color: c.muted, marginTop: 10, lineHeight: 16 }]}>Uses more API credits upfront but every announcement plays instantly — ideal for poor mobile signal on court</Text>
               )}
             </View>
           )}

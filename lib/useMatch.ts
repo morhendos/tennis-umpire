@@ -22,6 +22,7 @@ import {
   cancelServeTimer,
 } from './speech';
 import { useVoiceStore } from './voiceStore';
+import { generateCache, clearCache } from './voiceCache';
 
 const MAX_HISTORY = 50;
 
@@ -53,6 +54,9 @@ export function useMatch(): UseMatchReturn {
       const newMatch = createMatch(playerA, playerB, format, server);
       setMatch(newMatch);
       setHistory([]);
+      
+      // Start pre-caching voices in background (non-blocking)
+      generateCache(playerA, playerB);
       
       // Announce match start - announce the server
       const serverName = server === 'A' ? playerA : playerB;
@@ -174,6 +178,7 @@ export function useMatch(): UseMatchReturn {
 
   const resetMatch = useCallback(() => {
     cancelServeTimer(); // Cancel any pending announcements
+    clearCache(); // Clear pre-cached audio
     setMatch(null);
     setHistory([]);
   }, []);

@@ -22,7 +22,7 @@ import {
   cancelServeTimer,
 } from './speech';
 import { useVoiceStore } from './voiceStore';
-import { generateCache, clearCache } from './voiceCache';
+import { generateCache, clearCache, progressCache } from './voiceCache';
 
 const MAX_HISTORY = 50;
 
@@ -101,6 +101,16 @@ export function useMatch(): UseMatchReturn {
 
       // Check what happened
       const status = getMatchStatus(newState);
+
+      // Progressive pre-cache: when games change, cache ahead
+      if (newGamesA !== prevGamesA || newGamesB !== prevGamesB || newSetsCount > prevSetsCount) {
+        progressCache(
+          newState.games.A, 
+          newState.games.B, 
+          newState.sets.length - 1, // completed sets
+          newState.tiebreak
+        );
+      }
 
       // Match complete
       if (status === 'match_complete') {

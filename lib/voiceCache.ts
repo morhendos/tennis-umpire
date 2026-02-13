@@ -55,6 +55,9 @@ export function getCacheStats(): { cached: number; total: number } {
 /** Clear all cached audio */
 export function clearCache() {
   audioCache.clear();
+  queuedTexts.clear();
+  cachedPlayerA = '';
+  cachedPlayerB = '';
   useCacheStore.setState({ isGenerating: false, total: 0, completed: 0, failed: 0 });
   console.log('🗑️ Voice cache cleared');
 }
@@ -69,7 +72,12 @@ export function cancelCacheGeneration() {
   console.log('⏹️ Cache generation cancelled');
 }
 
-/** Generate all announcement audio clips for a match */
+// Track what's been queued to avoid re-generating
+const queuedTexts = new Set<string>();
+let cachedPlayerA = '';
+let cachedPlayerB = '';
+
+/** Initial cache at match start — only point scores + first game */
 export async function generateCache(playerA: string, playerB: string): Promise<void> {
   const { precacheEnabled, voiceEngine } = useVoiceStore.getState();
   
@@ -86,28 +94,62 @@ export async function generateCache(playerA: string, playerB: string): Promise<v
   // Cancel any previous generation
   cancelCacheGeneration();
   clearCache();
+  queuedTexts.clear();
+  cachedPlayerA = playerA;
+  cachedPlayerB = playerB;
 
   const lang = useVoiceStore.getState().language as LanguageCode;
   
-  // Build list of all texts to cache with their announcement styles
-  const entries = buildCacheEntries(playerA, playerB, lang);
+  // Only cache what's needed for the very start of the match
+  const entries = buildInitialEntries(playerA, playerB, lang);
   
-  console.log(`🔥 Pre-caching ${entries.length} announcements (${voiceEngine}, ${lang})...`);
+  await processEntries(entries);
+}
+
+/** Progressive cache — call after each game to cache ahead */
+export async function progressCache(
+  gamesA: number, 
+  gamesB: number, 
+  setsPlayed: number,
+  tiebreak: boolean
+): Promise<void> {
+  const { precacheEnabled, voiceEngine } = useVoiceStore.getState();
+  if (!precacheEnabled || voiceEngine === 'native') return;
+  if (!cachedPlayerA || !cachedPlayerB) return;
+
+  const lang = useVoiceStore.getState().language as LanguageCode;
+  const entries = buildProgressiveEntries(
+    cachedPlayerA, cachedPlayerB, lang,
+    gamesA, gamesB, setsPlayed, tiebreak
+  );
+
+  if (entries.length > 0) {
+    await processEntries(entries);
+  }
+}
+
+/** Process a batch of cache entries */
+async function processEntries(entries: CacheEntry[]): Promise<void> {
+  // Filter out already queued
+  const newEntries = entries.filter(e => !queuedTexts.has(e.text));
+  if (newEntries.length === 0) return;
+
+  for (const e of newEntries) queuedTexts.add(e.text);
+
+  const { voiceEngine } = useVoiceStore.getState();
+  console.log(`🔥 Pre-caching ${newEntries.length} announcements (${voiceEngine})...`);
   
   abortController = new AbortController();
   const signal = abortController.signal;
   
-  useCacheStore.setState({
+  useCacheStore.setState(s => ({
     isGenerating: true,
-    total: entries.length,
-    completed: 0,
-    failed: 0,
-  });
+    total: s.total + newEntries.length,
+  }));
 
-  // Process in batches with concurrency limit
   let i = 0;
-  while (i < entries.length && !signal.aborted) {
-    const batch = entries.slice(i, i + MAX_CONCURRENT);
+  while (i < newEntries.length && !signal.aborted) {
+    const batch = newEntries.slice(i, i + MAX_CONCURRENT);
     const promises = batch.map(entry => 
       generateSingleClip(entry.text, entry.style, signal)
     );
@@ -116,8 +158,8 @@ export async function generateCache(playerA: string, playerB: string): Promise<v
   }
 
   if (!signal.aborted) {
-    const { completed, failed } = useCacheStore.getState();
-    console.log(`✅ Pre-cache complete: ${completed} cached, ${failed} failed out of ${entries.length}`);
+    const { completed, failed, total } = useCacheStore.getState();
+    console.log(`✅ Pre-cache batch done: ${completed}/${total} cached, ${failed} failed`);
   }
   
   useCacheStore.setState({ isGenerating: false });
@@ -308,59 +350,68 @@ function gameScoreWord(n: number, lang: LanguageCode): string {
   return String(n);
 }
 
-function buildCacheEntries(playerA: string, playerB: string, lang: LanguageCode): CacheEntry[] {
-  const entries: CacheEntry[] = [];
-  const seen = new Set<string>();
-  
-  function add(text: string, style: AnnouncementStyle) {
+// ─── Entry builders ─────────────────────────────────────────
+
+function createAdder(entries: CacheEntry[], seen: Set<string>) {
+  return function add(text: string, style: AnnouncementStyle) {
     if (!seen.has(text)) {
       seen.add(text);
       entries.push({ text, style });
     }
+  };
+}
+
+/** Add all game-won announcement variants for a specific score */
+function addGameWonEntries(
+  add: (text: string, style: AnnouncementStyle) => void,
+  playerA: string, playerB: string, lang: LanguageCode,
+  w: number, l: number, winner: string
+) {
+  const loser = winner === playerA ? playerB : playerA;
+  if (w === l) {
+    add(`${t('game', lang)} ${winner}... ${w} ${t('gamesAll', lang)}`, 'game');
+  } else {
+    const leader = w > l ? winner : loser;
+    add(`${t('game', lang)} ${winner}... ${leader} ${t('leads', lang)} ${gameScoreWord(Math.max(w, l), lang)} ${t('gamesTo', lang)} ${gameScoreWord(Math.min(w, l), lang)}`, 'game');
+    add(`${t('game', lang)} ${winner}... ${gameScoreWord(w, lang)} ${gameScoreWord(l, lang)}`, 'game');
   }
+}
 
-  // ═══════════════════════════════════════════════════════
-  // PRIORITY ORDER — what's needed soonest comes first
-  // so the cache is useful even while still generating.
-  // ═══════════════════════════════════════════════════════
+/** Match start — only point scores + first game announcements */
+function buildInitialEntries(playerA: string, playerB: string, lang: LanguageCode): CacheEntry[] {
+  const entries: CacheEntry[] = [];
+  const seen = new Set<string>();
+  const add = createAdder(entries, seen);
 
-  // ─── P1: FIRST POINT SCORES (needed within seconds) ───
-  // The very first point of the match produces one of these:
-  const earlyPointPairs = [
-    [15, 0], [0, 15], // after 1st point
-    [30, 0], [0, 30], [15, 15], // after 2nd point
-    [40, 0], [0, 40], [30, 15], [15, 30], // after 3rd point
-    [40, 15], [15, 40], [30, 30], // after 4th point
-    [40, 30], [30, 40], // after 5th point
-  ];
-  for (const [s, r] of earlyPointPairs) {
-    const sw = pointToWord(s, lang);
-    const rw = pointToWord(r, lang);
-    if (s === r) {
-      add(`${sw}-${t('all', lang)}`, 'score');
-    } else {
-      add(`${sw}-${rw}`, 'score');
+  // All point scores (reused every game, small fixed set)
+  const pointValues = [0, 15, 30, 40];
+  for (const s of pointValues) {
+    for (const r of pointValues) {
+      if (s === 40 && r === 40) continue;
+      if (s === 0 && r === 0) continue;
+      const sw = pointToWord(s, lang);
+      const rw = pointToWord(r, lang);
+      if (s === r) {
+        add(`${sw}-${t('all', lang)}`, 'score');
+      } else {
+        add(`${sw}-${rw}`, 'score');
+      }
     }
   }
-
-  // Deuce & advantage — can happen from 5th point onward
   add(t('deuce', lang), 'score');
   add(`${t('advantage', lang)} ${playerA}`, 'score');
   add(`${t('advantage', lang)} ${playerB}`, 'score');
 
-  // ─── P2: FIRST GAME WON (needed after ~4-8 points) ────
+  // First game won (1-0)
   for (const winner of [playerA, playerB]) {
-    const loser = winner === playerA ? playerB : playerA;
-    // 1-0 scores (first game of match)
-    add(`${t('game', lang)} ${winner}... ${winner} ${t('leads', lang)} ${gameScoreWord(1, lang)} ${t('gamesTo', lang)} ${gameScoreWord(0, lang)}`, 'game');
-    add(`${t('game', lang)} ${winner}... ${gameScoreWord(1, lang)} ${gameScoreWord(0, lang)}`, 'game');
+    addGameWonEntries(add, playerA, playerB, lang, 1, 0, winner);
   }
 
-  // To serve — needed right after first game
+  // To serve
   add(`${playerA} ${t('toServe', lang)}`, 'calm');
   add(`${playerB} ${t('toServe', lang)}`, 'calm');
 
-  // ─── P3: FIRST CHANGEOVER (after game 1 = odd total) ──
+  // First changeover (happens after game 1)
   const changeoverPhrases = [
     t('changeover', lang),
     t('playersChangeSides', lang),
@@ -377,108 +428,95 @@ function buildCacheEntries(playerA: string, playerB: string, lang: LanguageCode)
       add(`${cp}... ${dp}`, 'calm');
     }
   }
-  // "Time... X to serve" after changeover timer
   add(`${t('time', lang)}... ${playerA} ${t('toServe', lang)}`, 'calm');
   add(`${t('time', lang)}... ${playerB} ${t('toServe', lang)}`, 'calm');
 
-  // ─── P4: EARLY GAME SCORES (games 1-1 through 3-3) ────
+  console.log(`📋 Initial cache: ${entries.length} entries for "${playerA}" vs "${playerB}" (${lang})`);
+  return entries;
+}
+
+/** Progressive cache — look ahead 2 games from current state */
+function buildProgressiveEntries(
+  playerA: string, playerB: string, lang: LanguageCode,
+  gamesA: number, gamesB: number, setsPlayed: number, tiebreak: boolean
+): CacheEntry[] {
+  const entries: CacheEntry[] = [];
+  const seen = new Set<string>();
+  const add = createAdder(entries, seen);
+
+  const maxGame = Math.max(gamesA, gamesB);
+  const totalGames = gamesA + gamesB;
+
+  // Cache game-won announcements for next 2 possible games ahead
+  // from current state. E.g. if 2-1, cache all combos up to 4-1, 3-3, etc.
+  const lookAhead = 2;
+  const maxW = Math.min(gamesA + lookAhead, 7);
+  const maxL = Math.min(gamesB + lookAhead, 7);
+  
   for (const winner of [playerA, playerB]) {
-    const loser = winner === playerA ? playerB : playerA;
-    for (let w = 1; w <= 3; w++) {
-      for (let l = 0; l <= 3; l++) {
+    for (let w = 0; w <= maxW; w++) {
+      for (let l = 0; l <= maxL; l++) {
         if (w === 0 && l === 0) continue;
-        if (w === 1 && l === 0) continue; // already added in P2
-        if (w === l) {
-          add(`${t('game', lang)} ${winner}... ${w} ${t('gamesAll', lang)}`, 'game');
+        // Only cache scores reachable from current state
+        if (w < gamesA || l < gamesB) continue;
+        if (w === gamesA && l === gamesB) continue; // current score, already played
+        addGameWonEntries(add, playerA, playerB, lang, w, l, winner);
+      }
+    }
+  }
+
+  // When either player reaches 4+ games, start caching set point
+  if (maxGame >= 4) {
+    add(`${t('setPoint', lang)}, ${playerA}`, 'dramatic');
+    add(`${t('setPoint', lang)}, ${playerB}`, 'dramatic');
+  }
+
+  // When either player reaches 5+ games, cache set won announcements
+  if (maxGame >= 5) {
+    for (const winner of [playerA, playerB]) {
+      for (let w = 6; w <= 7; w++) {
+        for (let l = 0; l <= 6; l++) {
+          if (w <= l) continue;
+          add(`${t('gameAndSet', lang)}, ${winner}... ${gameScoreWord(w, lang)} ${gameScoreWord(l, lang)}`, 'set');
+          add(`${t('set', lang)} ${winner}... ${gameScoreWord(w, lang)} ${t('gamesTo', lang)} ${gameScoreWord(l, lang)}`, 'set');
+        }
+      }
+    }
+    // Set break phrases
+    add(`${t('setBreak', lang)}... ${t('twoMinuteBreak', lang)}`, 'calm');
+    add(`${t('setBreak', lang)}... 120 ${t('seconds', lang)}`, 'calm');
+    add(t('twoMinuteBreak', lang), 'calm');
+  }
+
+  // When both players reach 5+ games, cache tiebreak
+  if (gamesA >= 5 && gamesB >= 5) {
+    add(t('tiebreak', lang), 'dramatic');
+    add(t('superTiebreak', lang), 'dramatic');
+    // Tiebreak point scores
+    for (let a = 0; a <= 7; a++) {
+      for (let b = 0; b <= 7; b++) {
+        if (a === 0 && b === 0) continue;
+        if (a === b) {
+          add(`${a}-${t('all', lang)}`, 'score');
+        } else if (a > b) {
+          add(`${a}-${b}`, 'score');
         } else {
-          const leader = w > l ? winner : loser;
-          add(`${t('game', lang)} ${winner}... ${leader} ${t('leads', lang)} ${gameScoreWord(Math.max(w, l), lang)} ${t('gamesTo', lang)} ${gameScoreWord(Math.min(w, l), lang)}`, 'game');
-          add(`${t('game', lang)} ${winner}... ${gameScoreWord(w, lang)} ${gameScoreWord(l, lang)}`, 'game');
+          add(`${b}-${a}`, 'score');
         }
       }
     }
   }
 
-  // ─── P5: REMAINING POINT SCORES (any stragglers) ──────
-  const pointValues = [0, 15, 30, 40];
-  for (const s of pointValues) {
-    for (const r of pointValues) {
-      if (s === 40 && r === 40) continue;
-      if (s === 0 && r === 0) continue;
-      const sw = pointToWord(s, lang);
-      const rw = pointToWord(r, lang);
-      if (s === r) {
-        add(`${sw}-${t('all', lang)}`, 'score');
-      } else {
-        add(`${sw}-${rw}`, 'score');
-      }
-    }
+  // In 2nd+ set, cache match point & match won
+  if (setsPlayed >= 1) {
+    add(`${t('matchPoint', lang)}, ${playerA}`, 'match');
+    add(`${t('matchPoint', lang)}, ${playerB}`, 'match');
+    add(`${t('gameSetMatch', lang)}... ${playerA} ${t('wins', lang)}`, 'match');
+    add(`${t('gameSetMatch', lang)}... ${playerB} ${t('wins', lang)}`, 'match');
   }
 
-  // ─── P6: MID-MATCH GAME SCORES (4-0 through 6-6) ─────
-  for (const winner of [playerA, playerB]) {
-    const loser = winner === playerA ? playerB : playerA;
-    for (let w = 1; w <= 6; w++) {
-      for (let l = 0; l <= 6; l++) {
-        if (w <= 3 && l <= 3) continue; // already added in P4
-        if (w === l) {
-          add(`${t('game', lang)} ${winner}... ${w} ${t('gamesAll', lang)}`, 'game');
-        } else {
-          const leader = w > l ? winner : loser;
-          add(`${t('game', lang)} ${winner}... ${leader} ${t('leads', lang)} ${gameScoreWord(Math.max(w, l), lang)} ${t('gamesTo', lang)} ${gameScoreWord(Math.min(w, l), lang)}`, 'game');
-          add(`${t('game', lang)} ${winner}... ${gameScoreWord(w, lang)} ${gameScoreWord(l, lang)}`, 'game');
-        }
-      }
-    }
+  if (entries.length > 0) {
+    console.log(`📋 Progressive cache: +${entries.length} entries (games ${gamesA}-${gamesB}, set ${setsPlayed + 1})`);
   }
-
-  // ─── P7: SET POINT & SET WON (mid-to-late set) ────────
-  add(`${t('setPoint', lang)}, ${playerA}`, 'dramatic');
-  add(`${t('setPoint', lang)}, ${playerB}`, 'dramatic');
-
-  for (const winner of [playerA, playerB]) {
-    for (let w = 6; w <= 7; w++) {
-      for (let l = 0; l <= 6; l++) {
-        if (w <= l) continue;
-        add(`${t('gameAndSet', lang)}, ${winner}... ${gameScoreWord(w, lang)} ${gameScoreWord(l, lang)}`, 'set');
-        add(`${t('set', lang)} ${winner}... ${gameScoreWord(w, lang)} ${t('gamesTo', lang)} ${gameScoreWord(l, lang)}`, 'set');
-      }
-    }
-  }
-
-  // Set break phrases
-  const setBreakAnnouncements = [
-    `${t('setBreak', lang)}... ${t('twoMinuteBreak', lang)}`,
-    `${t('setBreak', lang)}... 120 ${t('seconds', lang)}`,
-    t('twoMinuteBreak', lang),
-  ];
-  for (const sba of setBreakAnnouncements) {
-    add(sba, 'calm');
-  }
-
-  // ─── P8: TIEBREAK (only if set reaches 6-6) ──────────
-  add(t('tiebreak', lang), 'dramatic');
-  add(t('superTiebreak', lang), 'dramatic');
-
-  for (let a = 0; a <= 7; a++) {
-    for (let b = 0; b <= 7; b++) {
-      if (a === 0 && b === 0) continue;
-      if (a === b) {
-        add(`${a}-${t('all', lang)}`, 'score');
-      } else if (a > b) {
-        add(`${a}-${b}`, 'score');
-      } else {
-        add(`${b}-${a}`, 'score');
-      }
-    }
-  }
-
-  // ─── P9: MATCH POINT & MATCH WON (end of match) ──────
-  add(`${t('matchPoint', lang)}, ${playerA}`, 'match');
-  add(`${t('matchPoint', lang)}, ${playerB}`, 'match');
-  add(`${t('gameSetMatch', lang)}... ${playerA} ${t('wins', lang)}`, 'match');
-  add(`${t('gameSetMatch', lang)}... ${playerB} ${t('wins', lang)}`, 'match');
-
-  console.log(`📋 Built ${entries.length} cache entries for "${playerA}" vs "${playerB}" (${lang})`);
   return entries;
 }

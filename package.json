@@ -8,6 +8,8 @@
     "dev": "expo run:android",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "ios:sim": "SKIP_FLIC2=1 expo run:ios",
+    "ios:device": "expo run:ios --device",
     "web": "expo start --web",
     "lint": "expo lint",
     "build:apk": "bash build-apk.sh",

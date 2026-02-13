@@ -1,5 +1,23 @@
-import Flic2 from 'react-native-flic2';
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
+
+// Flic2 native module may not be available (e.g. iOS simulator)
+// Import gracefully so the app still works without Bluetooth buttons
+let Flic2: any = null;
+try {
+  // Only attempt import on platforms that could support it
+  if (Platform.OS === 'ios' || Platform.OS === 'android') {
+    const flic2Module = require('react-native-flic2');
+    Flic2 = flic2Module.default || flic2Module;
+    // Verify the native module is actually linked
+    if (!NativeModules.Flic2) {
+      console.log('[Flic] Native module not linked (simulator build?)');
+      Flic2 = null;
+    }
+  }
+} catch (e) {
+  console.log('[Flic] Module not available:', (e as Error).message);
+  Flic2 = null;
+}
 
 export type FlicButtonId = string;
 export type PlayerAssignment = 'A' | 'B' | null;
@@ -42,7 +60,16 @@ class FlicService {
   private scanCompletionCallbacks: Set<(button?: FlicButton) => void> = new Set();
   private _isScanning = false;
 
+  /** Whether Flic2 native module is available */
+  get isAvailable(): boolean {
+    return Flic2 !== null;
+  }
+
   async initialize(): Promise<boolean> {
+    if (!Flic2) {
+      console.log('[Flic] Native module not available — skipping init');
+      return false;
+    }
     if (this.isInitialized) return true;
     if (this.isInitializing) {
       // Wait for the other init call to finish
@@ -329,12 +356,14 @@ class FlicService {
   }
 
   isBluetoothSupported(): boolean {
-    return Platform.OS === 'ios' || Platform.OS === 'android';
+    return Flic2 !== null && (Platform.OS === 'ios' || Platform.OS === 'android');
   }
 
   cleanup(): void {
     this.stopScan();
-    Flic2.disconnectAllKnownButtons();
+    if (Flic2) {
+      Flic2.disconnectAllKnownButtons();
+    }
     this.eventListeners.clear();
     this.isInitialized = false;
   }

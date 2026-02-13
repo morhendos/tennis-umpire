@@ -1,9 +1,3 @@
-const skipFlic2 = process.env.SKIP_FLIC2 === '1';
-
-if (skipFlic2) {
-  console.log('⚠️  SKIP_FLIC2=1 → Flic2 excluded from autolinking (simulator build)');
-}
-
 export default {
   expo: {
     name: "Tennis Umpire",
@@ -67,11 +61,6 @@ export default {
       typedRoutes: true,
       reactCompiler: true,
     },
-    ...(skipFlic2 ? {
-      autolinking: {
-        exclude: ['react-native-flic2'],
-      },
-    } : {}),
     extra: {
       eas: {
         projectId: "db7b715b-433f-44f5-a2a8-ac58fcb09780",

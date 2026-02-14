@@ -1,22 +1,56 @@
 import { create } from 'zustand';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useVoiceStore } from './voiceStore';
 import { t, LanguageCode, TranslationKey } from './translations';
 
 // ============================================
-// Voice Pre-Cache System
+// Voice Pre-Cache System v2
 // ============================================
-// Generates all possible announcement audio clips at match start
-// so they play instantly with zero network latency on court.
+// Generates announcement audio clips and persists them to disk.
+// Clips survive app restarts and are reused across matches.
+// Each announcement has up to 2 variants for natural variation.
+//
+// Disk layout:
+//   {documentDirectory}/voice-cache/{engine}-{voiceId}-{lang}/
+//     index.json   — maps "text|style" → ["file1.mp3", "file2.mp3"]
+//     xxxxxx.mp3   — audio files
+//
+// Progressive strategy:
+//   Match 1: Generate variant 1 for all entries (playable immediately)
+//            Then background-fill variant 2
+//   Match 2+: Both variants ready, random pick = natural umpire
 
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
 const GOOGLE_TTS_API_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
 
-// Cache: text → base64 audio data URI
-const audioCache = new Map<string, string>();
+const CACHE_BASE_DIR = `${FileSystem.documentDirectory}voice-cache/`;
+const MAX_VARIANTS = 2;
+
+// ─── In-memory state ────────────────────────────────────────
+
+// Disk index loaded into memory: "text|style" → [fileUri1, fileUri2?]
+let diskIndex: Record<string, string[]> = {};
+let currentVoiceDir = '';
+let currentVoiceKey = '';
+let indexDirty = false;
+let saveIndexTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Fast lookup for playback: text → data URI (randomly picked variant)
+const playbackCache = new Map<string, string[]>();
+
+// Track which voice key the playback cache was loaded for
+let playbackVoiceKey = '';
 
 // Concurrency control
 const MAX_CONCURRENT = 3;
 let abortController: AbortController | null = null;
+
+// Track current match players
+let cachedPlayerA = '';
+let cachedPlayerB = '';
+
+// Track what's been queued this session
+const queuedTexts = new Set<string>();
 
 // ─── Cache status store (for UI progress) ───────────────────
 interface CacheStatus {
@@ -33,11 +67,210 @@ export const useCacheStore = create<CacheStatus>(() => ({
   failed: 0,
 }));
 
+// ─── Disk I/O helpers ───────────────────────────────────────
+
+/** Get the voice-specific cache directory */
+function getVoiceDir(): string {
+  const { voiceEngine, settings, googleSettings, language } = useVoiceStore.getState();
+  const voiceId = voiceEngine === 'google' ? googleSettings.voiceId : settings.voiceId;
+  const key = `${voiceEngine}-${voiceId}-${language}`;
+  return `${CACHE_BASE_DIR}${key}/`;
+}
+
+/** Get the voice key (for detecting changes) */
+function getVoiceKey(): string {
+  const { voiceEngine, settings, googleSettings, language } = useVoiceStore.getState();
+  const voiceId = voiceEngine === 'google' ? googleSettings.voiceId : settings.voiceId;
+  return `${voiceEngine}-${voiceId}-${language}`;
+}
+
+/** Ensure cache directory exists */
+async function ensureCacheDir(dir: string): Promise<void> {
+  const info = await FileSystem.getInfoAsync(dir);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    console.log(`📁 Created cache dir: ${dir.replace(FileSystem.documentDirectory || '', '')}`);
+  }
+}
+
+/** Load index.json from disk into memory */
+async function loadDiskIndex(voiceDir: string): Promise<Record<string, string[]>> {
+  const indexPath = `${voiceDir}index.json`;
+  try {
+    const info = await FileSystem.getInfoAsync(indexPath);
+    if (!info.exists) return {};
+    const content = await FileSystem.readAsStringAsync(indexPath);
+    const parsed = JSON.parse(content);
+    console.log(`📖 Loaded disk index: ${Object.keys(parsed).length} entries`);
+    return parsed;
+  } catch (e) {
+    console.log(`⚠️ Failed to load disk index, starting fresh`);
+    return {};
+  }
+}
+
+/** Save index.json to disk (debounced) */
+function scheduleSaveIndex(): void {
+  indexDirty = true;
+  if (saveIndexTimer) clearTimeout(saveIndexTimer);
+  saveIndexTimer = setTimeout(() => {
+    saveIndexTimer = null;
+    flushIndex();
+  }, 2000); // batch writes every 2 seconds
+}
+
+/** Immediately flush index to disk */
+async function flushIndex(): Promise<void> {
+  if (!indexDirty || !currentVoiceDir) return;
+  try {
+    const indexPath = `${currentVoiceDir}index.json`;
+    await FileSystem.writeAsStringAsync(indexPath, JSON.stringify(diskIndex));
+    indexDirty = false;
+  } catch (e) {
+    console.log(`⚠️ Failed to save index:`, e);
+  }
+}
+
+/** Generate a short random filename */
+function randomFilename(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let name = '';
+  for (let i = 0; i < 8; i++) name += chars[Math.floor(Math.random() * chars.length)];
+  return `${name}.mp3`;
+}
+
+/** Make cache key from text + style */
+function cacheKey(text: string, style: AnnouncementStyle): string {
+  return `${text}|${style}`;
+}
+
 // ─── Public API ─────────────────────────────────────────────
 
-/** Look up a cached audio clip by its announcement text */
+/** Look up a cached audio clip by its announcement text, returns a random variant */
 export function getCachedAudio(text: string): string | null {
-  return audioCache.get(text) || null;
+  // If voice changed since cache was loaded, everything is stale
+  const currentKey = getVoiceKey();
+  if (currentKey !== playbackVoiceKey) {
+    console.log(`🔄 Voice changed mid-match (${playbackVoiceKey} → ${currentKey}), switching cache`);
+    playbackCache.clear();
+    playbackVoiceKey = currentKey;
+    // Trigger async reload of new voice's disk index (won't help THIS call but will help next)
+    switchVoiceCacheAsync(currentKey);
+    return null;
+  }
+
+  const variants = playbackCache.get(text);
+  if (variants && variants.length > 0) {
+    const pick = variants[Math.floor(Math.random() * variants.length)];
+    const variantLabel = variants.length > 1 ? `variant ${variants.indexOf(pick) + 1}/${variants.length}` : '1 variant';
+    console.log(`⚡ CACHE HIT (${variantLabel}): "${text}"`);
+    return pick;
+  }
+  console.log(`❌ CACHE MISS: "${text}" — will generate live`);
+  return null;
+}
+
+/** Switch disk index to a new voice (async, called on mid-match voice change) */
+async function switchVoiceCacheAsync(voiceKey: string): Promise<void> {
+  // Cancel any in-progress background generation to prevent cross-contamination
+  if (abortController) {
+    console.log(`⏹️ Aborting background generation (voice switching)`);
+    abortController.abort();
+    abortController = null;
+  }
+  
+  try {
+    const voiceDir = `${CACHE_BASE_DIR}${voiceKey}/`;
+    await ensureCacheDir(voiceDir);
+    diskIndex = await loadDiskIndex(voiceDir);
+    currentVoiceDir = voiceDir;
+    currentVoiceKey = voiceKey;
+    console.log(`🎙️ Switched to voice cache: ${voiceKey} (${Object.keys(diskIndex).length} entries on disk)`);
+    
+    // Pre-load any disk entries into playback cache for immediate use
+    let loaded = 0;
+    for (const [key, filenames] of Object.entries(diskIndex)) {
+      const text = key.split('|')[0]; // extract text from "text|style" key
+      if (playbackCache.has(text)) continue;
+      
+      const uris: string[] = [];
+      for (const filename of filenames) {
+        try {
+          const base64 = await FileSystem.readAsStringAsync(`${voiceDir}${filename}`, { encoding: FileSystem.EncodingType.Base64 });
+          uris.push(`data:audio/mpeg;base64,${base64}`);
+        } catch (_) {}
+      }
+      if (uris.length > 0) {
+        playbackCache.set(text, uris);
+        loaded++;
+      }
+    }
+    if (loaded > 0) {
+      console.log(`♻️ Loaded ${loaded} entries from disk for ${voiceKey}`);
+    }
+    
+    // If mid-match, background-generate initial entries (point scores, deuce, etc.)
+    // that would normally only be created at match start via generateCache()
+    if (cachedPlayerA && cachedPlayerB) {
+      const lang = useVoiceStore.getState().language as LanguageCode;
+      const initialEntries = buildInitialEntries(cachedPlayerA, cachedPlayerB, lang);
+      
+      // Filter to only entries not already on disk or in playback cache
+      const missing = initialEntries.filter(entry => {
+        if (playbackCache.has(entry.text)) return false;
+        const key = cacheKey(entry.text, entry.style);
+        return !diskIndex[key] || diskIndex[key].length === 0;
+      });
+      
+      if (missing.length > 0) {
+        console.log(`🔄 Mid-match voice switch: background-generating ${missing.length} point scores for ${voiceKey}`);
+        // Small delay so the current live generation isn't competing
+        setTimeout(() => {
+          processEntries(missing, 1).then(() => flushIndex());
+        }, 2000);
+      }
+    }
+  } catch (e) {
+    console.log(`⚠️ Failed to switch voice cache:`, e);
+  }
+}
+
+/** Save a live-generated clip to cache (called by speech.ts after live generation) */
+export async function saveLiveClip(text: string, style: string, base64Audio: string): Promise<void> {
+  try {
+    // Make sure we're pointing at the right voice directory
+    const voiceKey = getVoiceKey();
+    if (voiceKey !== currentVoiceKey) {
+      await switchVoiceCacheAsync(voiceKey);
+    }
+    
+    const announcementStyle = style as AnnouncementStyle;
+    const key = cacheKey(text, announcementStyle);
+    const existingVariants = diskIndex[key] || [];
+    
+    // Don't exceed max variants
+    if (existingVariants.length >= MAX_VARIANTS) return;
+    
+    // Save to filesystem
+    const filename = randomFilename();
+    const filePath = `${currentVoiceDir}${filename}`;
+    await FileSystem.writeAsStringAsync(filePath, base64Audio, { encoding: FileSystem.EncodingType.Base64 });
+    
+    // Update disk index
+    if (!diskIndex[key]) diskIndex[key] = [];
+    diskIndex[key].push(filename);
+    scheduleSaveIndex();
+    
+    // Update playback cache
+    const dataUri = `data:audio/mpeg;base64,${base64Audio}`;
+    const existing = playbackCache.get(text) || [];
+    existing.push(dataUri);
+    playbackCache.set(text, existing);
+    
+    console.log(`💾 LIVE → SAVED: "${text}" (v${existingVariants.length + 1})`);
+  } catch (e: any) {
+    console.log(`⚠️ Failed to save live clip: ${e.message}`);
+  }
 }
 
 /** Check if pre-caching is active */
@@ -47,19 +280,84 @@ export function isCacheReady(): boolean {
 }
 
 /** Get cache stats */
-export function getCacheStats(): { cached: number; total: number } {
+export function getCacheStats(): { cached: number; total: number; variants: number; diskEntries: number } {
   const { total, completed } = useCacheStore.getState();
-  return { cached: completed, total };
+  const totalVariants = Object.values(diskIndex).reduce((sum, arr) => sum + arr.length, 0);
+  return { cached: completed, total, variants: totalVariants, diskEntries: Object.keys(diskIndex).length };
 }
 
-/** Clear all cached audio */
+/** Clear match-specific in-memory state (keeps disk cache) */
 export function clearCache() {
-  audioCache.clear();
+  playbackCache.clear();
   queuedTexts.clear();
   cachedPlayerA = '';
   cachedPlayerB = '';
   useCacheStore.setState({ isGenerating: false, total: 0, completed: 0, failed: 0 });
-  console.log('🗑️ Voice cache cleared');
+  console.log(`🗑️ Match cache cleared (disk cache preserved: ${Object.keys(diskIndex).length} entries)`);
+}
+
+/** Clear disk cache for current voice */
+export async function clearCurrentVoiceCache(): Promise<void> {
+  cancelCacheGeneration();
+  playbackCache.clear();
+  queuedTexts.clear();
+  diskIndex = {};
+  indexDirty = false;
+  if (currentVoiceDir) {
+    try {
+      await FileSystem.deleteAsync(currentVoiceDir, { idempotent: true });
+      console.log(`🗑️ Deleted disk cache for: ${currentVoiceKey}`);
+    } catch (e) {
+      console.log(`⚠️ Failed to delete voice cache:`, e);
+    }
+  }
+  useCacheStore.setState({ isGenerating: false, total: 0, completed: 0, failed: 0 });
+}
+
+/** Clear ALL disk caches (all voices/languages) */
+export async function clearAllCaches(): Promise<void> {
+  cancelCacheGeneration();
+  playbackCache.clear();
+  queuedTexts.clear();
+  diskIndex = {};
+  indexDirty = false;
+  cachedPlayerA = '';
+  cachedPlayerB = '';
+  try {
+    await FileSystem.deleteAsync(CACHE_BASE_DIR, { idempotent: true });
+    console.log('🗑️ All voice caches deleted from disk');
+  } catch (e) {
+    console.log(`⚠️ Failed to delete all caches:`, e);
+  }
+  useCacheStore.setState({ isGenerating: false, total: 0, completed: 0, failed: 0 });
+}
+
+/** Get disk usage info for all voice caches */
+export async function getCacheDiskInfo(): Promise<Array<{ voiceKey: string; files: number; entries: number }>> {
+  const results: Array<{ voiceKey: string; files: number; entries: number }> = [];
+  try {
+    const baseInfo = await FileSystem.getInfoAsync(CACHE_BASE_DIR);
+    if (!baseInfo.exists) return results;
+    
+    const dirs = await FileSystem.readDirectoryAsync(CACHE_BASE_DIR);
+    for (const dir of dirs) {
+      try {
+        const dirPath = `${CACHE_BASE_DIR}${dir}/`;
+        const files = await FileSystem.readDirectoryAsync(dirPath);
+        const mp3Count = files.filter(f => f.endsWith('.mp3')).length;
+        
+        // Try to read index for entry count
+        let entryCount = 0;
+        try {
+          const idx = await FileSystem.readAsStringAsync(`${dirPath}index.json`);
+          entryCount = Object.keys(JSON.parse(idx)).length;
+        } catch (_) {}
+        
+        results.push({ voiceKey: dir, files: mp3Count, entries: entryCount });
+      } catch (_) {}
+    }
+  } catch (_) {}
+  return results;
 }
 
 /** Cancel any in-progress cache generation */
@@ -69,15 +367,14 @@ export function cancelCacheGeneration() {
     abortController = null;
   }
   useCacheStore.setState({ isGenerating: false });
+  // Flush any pending index writes
+  if (indexDirty) flushIndex();
   console.log('⏹️ Cache generation cancelled');
 }
 
-// Track what's been queued to avoid re-generating
-const queuedTexts = new Set<string>();
-let cachedPlayerA = '';
-let cachedPlayerB = '';
+// ─── Main cache generation ──────────────────────────────────
 
-/** Initial cache at match start — only point scores + first game */
+/** Initial cache at match start */
 export async function generateCache(playerA: string, playerB: string): Promise<void> {
   const { precacheEnabled, voiceEngine } = useVoiceStore.getState();
   
@@ -94,16 +391,93 @@ export async function generateCache(playerA: string, playerB: string): Promise<v
   // Cancel any previous generation
   cancelCacheGeneration();
   clearCache();
-  queuedTexts.clear();
   cachedPlayerA = playerA;
   cachedPlayerB = playerB;
 
+  // Initialize disk cache for current voice
+  const voiceKey = getVoiceKey();
+  const voiceDir = getVoiceDir();
+  
+  if (voiceKey !== currentVoiceKey) {
+    // Voice changed — load new index from disk
+    await ensureCacheDir(voiceDir);
+    diskIndex = await loadDiskIndex(voiceDir);
+    currentVoiceDir = voiceDir;
+    currentVoiceKey = voiceKey;
+    console.log(`🎙️ Voice cache: ${voiceKey} (${Object.keys(diskIndex).length} entries on disk)`);
+  }
+  playbackVoiceKey = voiceKey;
+
   const lang = useVoiceStore.getState().language as LanguageCode;
   
-  // Only cache what's needed for the very start of the match
+  // Build all entries needed for match start
   const entries = buildInitialEntries(playerA, playerB, lang);
   
-  await processEntries(entries);
+  // Check disk for existing clips — load into playback cache
+  let diskHits = 0;
+  let needVariant1: CacheEntry[] = [];
+  let needVariant2: CacheEntry[] = [];
+  
+  for (const entry of entries) {
+    const key = cacheKey(entry.text, entry.style);
+    const diskVariants = diskIndex[key];
+    
+    if (diskVariants && diskVariants.length >= 1) {
+      // Load all disk variants into playback cache
+      const uris: string[] = [];
+      for (const filename of diskVariants) {
+        try {
+          const filePath = `${currentVoiceDir}${filename}`;
+          const base64 = await FileSystem.readAsStringAsync(filePath, { encoding: FileSystem.EncodingType.Base64 });
+          uris.push(`data:audio/mpeg;base64,${base64}`);
+        } catch (_) {
+          // File missing on disk — will re-generate
+        }
+      }
+      
+      if (uris.length > 0) {
+        playbackCache.set(entry.text, uris);
+        queuedTexts.add(entry.text);
+        diskHits++;
+        
+        // If only 1 variant, queue variant 2 for background fill
+        if (uris.length < MAX_VARIANTS) {
+          needVariant2.push(entry);
+        }
+        continue;
+      }
+    }
+    
+    // No disk cache — need to generate variant 1
+    needVariant1.push(entry);
+  }
+
+  console.log(`\n🎯 ════════════════════════════════════════`);
+  console.log(`🎯 CACHE PLAN for "${playerA}" vs "${playerB}"`);
+  console.log(`🎯 Total entries: ${entries.length}`);
+  console.log(`🎯 Disk hits: ${diskHits} (loaded from filesystem)`);
+  console.log(`🎯 Need variant 1: ${needVariant1.length} (new, will generate now)`);
+  console.log(`🎯 Need variant 2: ${needVariant2.length} (background fill after)`);
+  console.log(`🎯 ════════════════════════════════════════\n`);
+
+  // Phase 1: Generate missing variant 1s (blocks until done — match needs these)
+  if (needVariant1.length > 0) {
+    await processEntries(needVariant1, 1);
+  }
+  
+  // Flush index to disk after variant 1s
+  await flushIndex();
+
+  // Phase 2: Background-fill variant 2s (non-blocking, happens during match)
+  if (needVariant2.length > 0) {
+    console.log(`🔄 Background: filling ${needVariant2.length} variant 2s...`);
+    // Small delay so match start announcements aren't competing for bandwidth
+    setTimeout(() => {
+      processEntries(needVariant2, 2).then(() => {
+        flushIndex();
+      });
+    }, 5000);
+  }
 }
 
 /** Progressive cache — call after each game to cache ahead */
@@ -123,83 +497,199 @@ export async function progressCache(
     gamesA, gamesB, setsPlayed, tiebreak
   );
 
-  if (entries.length > 0) {
-    await processEntries(entries);
+  if (entries.length === 0) return;
+  
+  // Split into new entries vs variant 2 fills
+  const needVariant1: CacheEntry[] = [];
+  const needVariant2: CacheEntry[] = [];
+  
+  for (const entry of entries) {
+    if (queuedTexts.has(entry.text)) continue; // already in playback cache
+    
+    const key = cacheKey(entry.text, entry.style);
+    const diskVariants = diskIndex[key];
+    
+    if (diskVariants && diskVariants.length >= 1) {
+      // Load from disk
+      const uris: string[] = [];
+      for (const filename of diskVariants) {
+        try {
+          const filePath = `${currentVoiceDir}${filename}`;
+          const base64 = await FileSystem.readAsStringAsync(filePath, { encoding: FileSystem.EncodingType.Base64 });
+          uris.push(`data:audio/mpeg;base64,${base64}`);
+        } catch (_) {}
+      }
+      if (uris.length > 0) {
+        playbackCache.set(entry.text, uris);
+        queuedTexts.add(entry.text);
+        if (uris.length < MAX_VARIANTS) needVariant2.push(entry);
+        continue;
+      }
+    }
+    
+    needVariant1.push(entry);
+  }
+
+  if (needVariant1.length > 0) {
+    await processEntries(needVariant1, 1);
+    await flushIndex();
+  }
+  
+  // Background variant 2 fills
+  if (needVariant2.length > 0) {
+    setTimeout(() => {
+      processEntries(needVariant2, 2).then(() => flushIndex());
+    }, 3000);
   }
 }
 
-/** Process a batch of cache entries */
-async function processEntries(entries: CacheEntry[]): Promise<void> {
-  // Filter out already queued
-  const newEntries = entries.filter(e => !queuedTexts.has(e.text));
+/** Process a batch of cache entries for a specific variant number */
+async function processEntries(entries: CacheEntry[], variantNum: number): Promise<void> {
+  // Filter already queued for this variant pass
+  const newEntries = variantNum === 1 
+    ? entries.filter(e => !queuedTexts.has(e.text))
+    : entries; // variant 2: always generate even if text is queued (we want a SECOND version)
+    
   if (newEntries.length === 0) return;
 
-  for (const e of newEntries) queuedTexts.add(e.text);
+  if (variantNum === 1) {
+    for (const e of newEntries) queuedTexts.add(e.text);
+  }
+
+  // Snapshot the voice context — if it changes mid-batch, clips get discarded
+  const snapshotVoiceKey = currentVoiceKey;
+  const snapshotVoiceDir = currentVoiceDir;
 
   const { voiceEngine } = useVoiceStore.getState();
-  console.log(`🔥 Pre-caching ${newEntries.length} announcements (${voiceEngine})...`);
+  const label = variantNum === 1 ? 'PRE-CACHING' : 'VARIANT 2 FILL';
+  console.log(`\n🔥 ════════════════════════════════════════`);
+  console.log(`🔥 ${label}: ${newEntries.length} announcements (${voiceEngine}) [${snapshotVoiceKey}]`);
+  console.log(`🔥 ════════════════════════════════════════`);
   
   abortController = new AbortController();
   const signal = abortController.signal;
   
-  useCacheStore.setState(s => ({
-    isGenerating: true,
-    total: s.total + newEntries.length,
-  }));
+  if (variantNum === 1) {
+    useCacheStore.setState(s => ({
+      isGenerating: true,
+      total: s.total + newEntries.length,
+    }));
+  }
 
+  let generated = 0;
   let i = 0;
   while (i < newEntries.length && !signal.aborted) {
+    // Check if voice changed — abort this batch to prevent cross-contamination
+    if (currentVoiceKey !== snapshotVoiceKey) {
+      console.log(`🚫 Voice changed during batch (${snapshotVoiceKey} → ${currentVoiceKey}), aborting`);
+      break;
+    }
     const batch = newEntries.slice(i, i + MAX_CONCURRENT);
     const promises = batch.map(entry => 
-      generateSingleClip(entry.text, entry.style, signal)
+      generateAndSaveClip(entry.text, entry.style, variantNum, signal, snapshotVoiceKey, snapshotVoiceDir).then(ok => {
+        if (ok) generated++;
+      })
     );
     await Promise.allSettled(promises);
     i += MAX_CONCURRENT;
   }
 
   if (!signal.aborted) {
-    const { completed, failed, total } = useCacheStore.getState();
-    console.log(`✅ Pre-cache batch done: ${completed}/${total} cached, ${failed} failed`);
+    if (variantNum === 1) {
+      const { completed, failed, total } = useCacheStore.getState();
+      console.log(`\n✅ ════════════════════════════════════════`);
+      console.log(`✅ CACHE READY: ${completed}/${total} cached, ${failed} failed`);
+      console.log(`✅ Disk entries: ${Object.keys(diskIndex).length} | Playback ready: ${playbackCache.size}`);
+      console.log(`✅ ════════════════════════════════════════\n`);
+    } else {
+      console.log(`\n✅ Variant 2 fill done: ${generated}/${newEntries.length} generated\n`);
+    }
   }
   
-  useCacheStore.setState({ isGenerating: false });
+  if (variantNum === 1) {
+    useCacheStore.setState({ isGenerating: false });
+  }
   abortController = null;
 }
 
-// ─── Internal: Generate a single audio clip ─────────────────
+// ─── Generate + persist a single clip ───────────────────────
 
 type AnnouncementStyle = 'score' | 'game' | 'set' | 'match' | 'dramatic' | 'calm';
 
-async function generateSingleClip(
+async function generateAndSaveClip(
   text: string, 
   style: AnnouncementStyle,
-  signal: AbortSignal
-): Promise<void> {
-  if (signal.aborted) return;
+  variantNum: number,
+  signal: AbortSignal,
+  expectedVoiceKey?: string,
+  expectedVoiceDir?: string
+): Promise<boolean> {
+  if (signal.aborted) return false;
+  
+  // Use snapshot voice context if provided, otherwise current
+  const voiceKey = expectedVoiceKey || currentVoiceKey;
+  const voiceDir = expectedVoiceDir || currentVoiceDir;
   
   try {
-    const { voiceEngine } = useVoiceStore.getState();
-    let audioUri: string | null = null;
+    // Determine which engine to use based on the snapshot voice key
+    const engine = voiceKey.startsWith('google') ? 'google' : voiceKey.startsWith('elevenlabs') ? 'elevenlabs' : null;
+    if (!engine) return false;
+    
+    let audioBase64: string | null = null;
 
-    if (voiceEngine === 'google') {
-      audioUri = await generateGoogleClip(text, style, signal);
-    } else if (voiceEngine === 'elevenlabs') {
-      audioUri = await generateElevenLabsClip(text, style, signal);
+    if (engine === 'google') {
+      audioBase64 = await generateGoogleClipBase64(text, style, signal);
+    } else if (engine === 'elevenlabs') {
+      audioBase64 = await generateElevenLabsClipBase64(text, style, signal);
     }
 
-    if (audioUri && !signal.aborted) {
-      audioCache.set(text, audioUri);
+    if (!audioBase64 || signal.aborted) return false;
+
+    // Verify voice hasn't changed before saving — prevents cross-contamination
+    if (expectedVoiceKey && currentVoiceKey !== expectedVoiceKey) {
+      console.log(`🚫 DISCARDED (voice changed): "${text}"`);
+      return false;
+    }
+
+    // Save to filesystem
+    const filename = randomFilename();
+    const filePath = `${voiceDir}${filename}`;
+    await FileSystem.writeAsStringAsync(filePath, audioBase64, { encoding: FileSystem.EncodingType.Base64 });
+
+    // Update disk index
+    const key = cacheKey(text, style);
+    if (!diskIndex[key]) diskIndex[key] = [];
+    diskIndex[key].push(filename);
+    scheduleSaveIndex();
+
+    // Only update playback cache if this voice is still active
+    if (currentVoiceKey === voiceKey) {
+      const dataUri = `data:audio/mpeg;base64,${audioBase64}`;
+      const existing = playbackCache.get(text) || [];
+      existing.push(dataUri);
+      playbackCache.set(text, existing);
+    }
+
+    const tag = variantNum === 1 ? '💾' : '💾²';
+    console.log(`${tag} SAVED (v${variantNum}): "${text}"`);
+    
+    if (variantNum === 1) {
       useCacheStore.setState(s => ({ completed: s.completed + 1 }));
     }
+    
+    return true;
   } catch (e: any) {
     if (e.name !== 'AbortError') {
-      console.log(`⚠️ Cache miss for "${text}": ${e.message}`);
-      useCacheStore.setState(s => ({ failed: s.failed + 1 }));
+      console.log(`⚠️ CACHE FAILED for "${text}": ${e.message}`);
+      if (variantNum === 1) {
+        useCacheStore.setState(s => ({ failed: s.failed + 1 }));
+      }
     }
+    return false;
   }
 }
 
-// ─── Google Cloud TTS clip generation ───────────────────────
+// ─── Google Cloud TTS generation ────────────────────────────
 
 function wrapInSSML(text: string, style: AnnouncementStyle): string {
   const escaped = text
@@ -227,7 +717,7 @@ function wrapInSSML(text: string, style: AnnouncementStyle): string {
   }
 }
 
-async function generateGoogleClip(
+async function generateGoogleClipBase64(
   text: string, 
   style: AnnouncementStyle,
   signal: AbortSignal
@@ -260,10 +750,10 @@ async function generateGoogleClip(
   const data = await response.json();
   if (!data.audioContent) return null;
 
-  return `data:audio/mp3;base64,${data.audioContent}`;
+  return data.audioContent; // already base64
 }
 
-// ─── ElevenLabs clip generation ─────────────────────────────
+// ─── ElevenLabs generation ──────────────────────────────────
 
 function prepareTextForElevenLabs(text: string): string {
   let prepared = text.replace(/\.\.\./g, '.');
@@ -284,7 +774,7 @@ const STYLE_OFFSETS: Record<AnnouncementStyle, { stabilityOffset: number; styleO
 
 function clamp(v: number, min = 0, max = 1) { return Math.min(max, Math.max(min, v)); }
 
-async function generateElevenLabsClip(
+async function generateElevenLabsClipBase64(
   text: string, 
   style: AnnouncementStyle,
   signal: AbortSignal
@@ -325,9 +815,7 @@ async function generateElevenLabsClip(
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
-  const base64 = btoa(binary);
-
-  return `data:audio/mpeg;base64,${base64}`;
+  return btoa(binary);
 }
 
 // ─── Build all texts to pre-cache ───────────────────────────
@@ -431,7 +919,7 @@ function buildInitialEntries(playerA: string, playerB: string, lang: LanguageCod
   add(`${t('time', lang)}... ${playerA} ${t('toServe', lang)}`, 'calm');
   add(`${t('time', lang)}... ${playerB} ${t('toServe', lang)}`, 'calm');
 
-  console.log(`📋 Initial cache: ${entries.length} entries for "${playerA}" vs "${playerB}" (${lang})`);
+  console.log(`📋 Initial cache plan: ${entries.length} entries for "${playerA}" vs "${playerB}" (${lang})`);
   return entries;
 }
 
@@ -445,10 +933,8 @@ function buildProgressiveEntries(
   const add = createAdder(entries, seen);
 
   const maxGame = Math.max(gamesA, gamesB);
-  const totalGames = gamesA + gamesB;
 
   // Cache game-won announcements for next 2 possible games ahead
-  // from current state. E.g. if 2-1, cache all combos up to 4-1, 3-3, etc.
   const lookAhead = 2;
   const maxW = Math.min(gamesA + lookAhead, 7);
   const maxL = Math.min(gamesB + lookAhead, 7);
@@ -457,15 +943,14 @@ function buildProgressiveEntries(
     for (let w = 0; w <= maxW; w++) {
       for (let l = 0; l <= maxL; l++) {
         if (w === 0 && l === 0) continue;
-        // Only cache scores reachable from current state
         if (w < gamesA || l < gamesB) continue;
-        if (w === gamesA && l === gamesB) continue; // current score, already played
+        if (w === gamesA && l === gamesB) continue;
         addGameWonEntries(add, playerA, playerB, lang, w, l, winner);
       }
     }
   }
 
-  // When either player reaches 4+ games, start caching set point
+  // When either player reaches 4+ games, cache set point
   if (maxGame >= 4) {
     add(`${t('setPoint', lang)}, ${playerA}`, 'dramatic');
     add(`${t('setPoint', lang)}, ${playerB}`, 'dramatic');
@@ -482,17 +967,15 @@ function buildProgressiveEntries(
         }
       }
     }
-    // Set break phrases
     add(`${t('setBreak', lang)}... ${t('twoMinuteBreak', lang)}`, 'calm');
     add(`${t('setBreak', lang)}... 120 ${t('seconds', lang)}`, 'calm');
     add(t('twoMinuteBreak', lang), 'calm');
   }
 
-  // When both players reach 5+ games, cache tiebreak
+  // When both players reach 5+ games, cache tiebreak scores
   if (gamesA >= 5 && gamesB >= 5) {
     add(t('tiebreak', lang), 'dramatic');
     add(t('superTiebreak', lang), 'dramatic');
-    // Tiebreak point scores
     for (let a = 0; a <= 7; a++) {
       for (let b = 0; b <= 7; b++) {
         if (a === 0 && b === 0) continue;

@@ -6,7 +6,7 @@ import { useVoiceStore } from './voiceStore';
 import { t, LanguageCode, TranslationKey } from './translations';
 import { startBreakMusic, fadeOutAndStop, stopBreakMusic } from './breakMusic';
 import { useBreakTimerStore } from './breakTimerStore';
-import { getCachedAudio } from './voiceCache';
+import { getCachedAudio, saveLiveClip } from './voiceCache';
 
 // API URLs
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
@@ -427,16 +427,20 @@ async function speakInternal(text: string, style: AnnouncementStyle, gen: number
     googleApiKey,
   } = useVoiceStore.getState();
   
-  console.log(`🎤 Speaking (${voiceEngine}, ${style}, gen ${gen}): "${text}"`);
+  console.log(`\n🎤 ────────────────────────────────────────`);
+  console.log(`🎤 SPEAK: "${text}"`);
+  console.log(`🎤 Engine: ${voiceEngine} | Style: ${style} | Gen: ${gen}`);
   
   // Check pre-cache first (works for Google and ElevenLabs)
   if (voiceEngine !== 'native') {
     const cachedUri = getCachedAudio(text);
     if (cachedUri) {
-      console.log('⚡ Playing from pre-cache (instant)');
+      console.log(`⚡ PLAYING FROM CACHE (zero latency)`);
+      console.log(`🎤 ────────────────────────────────────────\n`);
       await playCachedAudio(cachedUri, gen);
       return;
     }
+    console.log(`🌐 NOT IN CACHE — generating live via ${voiceEngine} API...`);
   }
   
   // Native TTS
@@ -450,8 +454,9 @@ async function speakInternal(text: string, style: AnnouncementStyle, gen: number
     if (googleApiKey) {
       try {
         const ssml = wrapInSSML(text, style);
-        await speakWithGoogle(ssml, googleSettings, googleApiKey, true, gen);
-        console.log('✅ Google TTS success');
+        await speakWithGoogle(ssml, googleSettings, googleApiKey, true, gen, text, style);
+        console.log(`✅ Google TTS success (live generation)`);
+        console.log(`🎤 ────────────────────────────────────────\n`);
         return;
       } catch (error) {
         console.log('⚠️ Google TTS failed, using native:', error);
@@ -470,7 +475,8 @@ async function speakInternal(text: string, style: AnnouncementStyle, gen: number
     if (elevenLabsApiKey) {
       try {
         await speakWithElevenLabs(text, settings, elevenLabsApiKey, gen, style);
-        console.log('✅ ElevenLabs success');
+        console.log(`✅ ElevenLabs success (live generation)`);
+        console.log(`🎤 ────────────────────────────────────────\n`);
         return;
       } catch (error) {
         console.log('⚠️ ElevenLabs failed, using native:', error);
@@ -489,7 +495,7 @@ async function speakInternal(text: string, style: AnnouncementStyle, gen: number
 }
 
 // Google Cloud TTS - now supports SSML
-async function speakWithGoogle(text: string, settings: any, apiKey: string, isSSML: boolean = false, gen?: number): Promise<void> {
+async function speakWithGoogle(text: string, settings: any, apiKey: string, isSSML: boolean = false, gen?: number, originalText?: string, style?: AnnouncementStyle): Promise<void> {
   console.log('🔄 Calling Google Cloud TTS...');
   if (isSSML) {
     console.log('📝 Using SSML:', text);
@@ -555,6 +561,11 @@ async function speakWithGoogle(text: string, settings: any, apiKey: string, isSS
   }
 
   const uri = `data:audio/mp3;base64,${data.audioContent}`;
+
+  // Save live-generated clip to disk cache for future reuse
+  if (originalText && style) {
+    saveLiveClip(originalText, style, data.audioContent).catch(() => {});
+  }
 
   const { sound } = await Audio.Sound.createAsync(
     { uri },
@@ -674,6 +685,9 @@ async function speakWithElevenLabs(text: string, settings: any, apiKey: string, 
   
   const base64 = arrayBufferToBase64(arrayBuffer);
   const uri = `data:audio/mpeg;base64,${base64}`;
+
+  // Save live-generated clip to disk cache for future reuse
+  saveLiveClip(text, style, base64).catch(() => {});
 
   const { sound } = await Audio.Sound.createAsync(
     { uri },

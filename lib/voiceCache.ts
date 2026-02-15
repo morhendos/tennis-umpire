@@ -146,7 +146,9 @@ function cacheKey(text: string, style: AnnouncementStyle): string {
 
 // ─── Public API ─────────────────────────────────────────────
 
-/** Look up a cached audio clip by its announcement text, returns a random variant */
+/** Look up a cached audio clip by its announcement text, returns a random variant.
+ *  Also returns the current voice key so the caller can snapshot it for saveLiveClip.
+ */
 export function getCachedAudio(text: string): string | null {
   // If voice changed since cache was loaded, everything is stale
   const currentKey = getVoiceKey();
@@ -168,6 +170,11 @@ export function getCachedAudio(text: string): string | null {
   }
   console.log(`❌ CACHE MISS: "${text}" — will generate live`);
   return null;
+}
+
+/** Get the current voice key for snapshot purposes (used by speech.ts) */
+export function getCurrentVoiceKey(): string {
+  return getVoiceKey();
 }
 
 /** Switch disk index to a new voice (async, called on mid-match voice change) */
@@ -235,39 +242,79 @@ async function switchVoiceCacheAsync(voiceKey: string): Promise<void> {
   }
 }
 
-/** Save a live-generated clip to cache (called by speech.ts after live generation) */
-export async function saveLiveClip(text: string, style: string, base64Audio: string): Promise<void> {
+/** Save a live-generated clip to cache (called by speech.ts after live generation)
+ *  IMPORTANT: callerVoiceKey is the voice that GENERATED the clip, captured before
+ *  the async API call — this prevents saving clips to the wrong voice directory
+ *  if the user switches voice mid-generation.
+ */
+export async function saveLiveClip(
+  text: string, 
+  style: string, 
+  base64Audio: string,
+  callerVoiceKey?: string
+): Promise<void> {
   try {
-    // Make sure we're pointing at the right voice directory
-    const voiceKey = getVoiceKey();
-    if (voiceKey !== currentVoiceKey) {
-      await switchVoiceCacheAsync(voiceKey);
+    // Use the voice key from when generation started, not the current one
+    const expectedKey = callerVoiceKey || getVoiceKey();
+    
+    // If the voice that generated this clip doesn't match the current active voice,
+    // save to the generating voice's directory but DON'T update playback cache
+    // (playback cache should only have current voice's clips)
+    const matchesCurrent = expectedKey === currentVoiceKey;
+    
+    // If caller voice doesn't match current AND doesn't match generating voice dir,
+    // we need to figure out the right directory
+    let targetDir = currentVoiceDir;
+    let targetIndex = diskIndex;
+    
+    if (!matchesCurrent) {
+      // Voice changed since this clip was generated
+      // Save to the GENERATING voice's directory (not current)
+      targetDir = `${CACHE_BASE_DIR}${expectedKey}/`;
+      await ensureCacheDir(targetDir);
+      
+      // Load that voice's index from disk (don't pollute current diskIndex)
+      const otherIndex = await loadDiskIndex(targetDir);
+      targetIndex = otherIndex;
+      
+      console.log(`💾 LIVE → saving to generating voice ${expectedKey} (current is ${currentVoiceKey})`);
     }
     
     const announcementStyle = style as AnnouncementStyle;
     const key = cacheKey(text, announcementStyle);
-    const existingVariants = diskIndex[key] || [];
+    const existingVariants = targetIndex[key] || [];
     
     // Don't exceed max variants
     if (existingVariants.length >= MAX_VARIANTS) return;
     
-    // Save to filesystem
+    // Save to filesystem in the GENERATING voice's directory
     const filename = randomFilename();
-    const filePath = `${currentVoiceDir}${filename}`;
+    const filePath = `${targetDir}${filename}`;
     await FileSystem.writeAsStringAsync(filePath, base64Audio, { encoding: FileSystem.EncodingType.Base64 });
     
-    // Update disk index
-    if (!diskIndex[key]) diskIndex[key] = [];
-    diskIndex[key].push(filename);
-    scheduleSaveIndex();
+    // Update the appropriate disk index
+    if (!targetIndex[key]) targetIndex[key] = [];
+    targetIndex[key].push(filename);
     
-    // Update playback cache
-    const dataUri = `data:audio/mpeg;base64,${base64Audio}`;
-    const existing = playbackCache.get(text) || [];
-    existing.push(dataUri);
-    playbackCache.set(text, existing);
+    if (matchesCurrent) {
+      // Current voice — normal save path
+      scheduleSaveIndex();
+      
+      // Update playback cache (safe — this IS the current voice)
+      const dataUri = `data:audio/mpeg;base64,${base64Audio}`;
+      const existing = playbackCache.get(text) || [];
+      existing.push(dataUri);
+      playbackCache.set(text, existing);
+    } else {
+      // Different voice — write index directly to that voice's directory
+      try {
+        const indexPath = `${targetDir}index.json`;
+        await FileSystem.writeAsStringAsync(indexPath, JSON.stringify(targetIndex));
+      } catch (_) {}
+      // Do NOT update playbackCache — it belongs to the current voice
+    }
     
-    console.log(`💾 LIVE → SAVED: "${text}" (v${existingVariants.length + 1})`);
+    console.log(`💾 LIVE → SAVED: "${text}" (v${existingVariants.length + 1})${matchesCurrent ? '' : ' [other voice]'}`);
   } catch (e: any) {
     console.log(`⚠️ Failed to save live clip: ${e.message}`);
   }
@@ -543,7 +590,11 @@ export async function progressCache(
   }
 }
 
-/** Process a batch of cache entries for a specific variant number */
+/** Process a batch of cache entries for a specific variant number.
+ *  Captures a snapshot of all voice context at call time. If the voice changes
+ *  mid-batch, clips are saved to the SNAPSHOT voice's directory (not current),
+ *  preventing cross-contamination.
+ */
 async function processEntries(entries: CacheEntry[], variantNum: number): Promise<void> {
   // Filter already queued for this variant pass
   const newEntries = variantNum === 1 
@@ -556,9 +607,13 @@ async function processEntries(entries: CacheEntry[], variantNum: number): Promis
     for (const e of newEntries) queuedTexts.add(e.text);
   }
 
-  // Snapshot the voice context — if it changes mid-batch, clips get discarded
+  // Snapshot the ENTIRE voice context — all writes go to this snapshot's directory,
+  // even if the active voice changes mid-batch
   const snapshotVoiceKey = currentVoiceKey;
   const snapshotVoiceDir = currentVoiceDir;
+  // Snapshot the disk index reference — if voice switches, diskIndex gets reassigned
+  // to the new voice. We keep our own reference so writes go to the right place.
+  const snapshotDiskIndex = diskIndex;
 
   const { voiceEngine } = useVoiceStore.getState();
   const label = variantNum === 1 ? 'PRE-CACHING' : 'VARIANT 2 FILL';
@@ -586,7 +641,10 @@ async function processEntries(entries: CacheEntry[], variantNum: number): Promis
     }
     const batch = newEntries.slice(i, i + MAX_CONCURRENT);
     const promises = batch.map(entry => 
-      generateAndSaveClip(entry.text, entry.style, variantNum, signal, snapshotVoiceKey, snapshotVoiceDir).then(ok => {
+      generateAndSaveClip(
+        entry.text, entry.style, variantNum, signal, 
+        snapshotVoiceKey, snapshotVoiceDir, snapshotDiskIndex
+      ).then(ok => {
         if (ok) generated++;
       })
     );
@@ -594,16 +652,30 @@ async function processEntries(entries: CacheEntry[], variantNum: number): Promis
     i += MAX_CONCURRENT;
   }
 
-  if (!signal.aborted) {
+  if (!signal.aborted && currentVoiceKey === snapshotVoiceKey) {
     if (variantNum === 1) {
       const { completed, failed, total } = useCacheStore.getState();
       console.log(`\n✅ ════════════════════════════════════════`);
       console.log(`✅ CACHE READY: ${completed}/${total} cached, ${failed} failed`);
-      console.log(`✅ Disk entries: ${Object.keys(diskIndex).length} | Playback ready: ${playbackCache.size}`);
+      console.log(`✅ Disk entries: ${Object.keys(snapshotDiskIndex).length} | Playback ready: ${playbackCache.size}`);
       console.log(`✅ ════════════════════════════════════════\n`);
     } else {
       console.log(`\n✅ Variant 2 fill done: ${generated}/${newEntries.length} generated\n`);
     }
+  }
+  
+  // Flush the snapshot index to disk (only if voice didn't change)
+  if (currentVoiceKey === snapshotVoiceKey) {
+    indexDirty = true;
+    await flushIndex();
+  } else if (generated > 0) {
+    // Voice changed but we generated some clips before aborting —
+    // write the snapshot index directly to its own directory
+    try {
+      const indexPath = `${snapshotVoiceDir}index.json`;
+      await FileSystem.writeAsStringAsync(indexPath, JSON.stringify(snapshotDiskIndex));
+      console.log(`💾 Flushed ${generated} entries to ${snapshotVoiceKey} index (voice changed)`);
+    } catch (_) {}
   }
   
   if (variantNum === 1) {
@@ -622,18 +694,26 @@ async function generateAndSaveClip(
   variantNum: number,
   signal: AbortSignal,
   expectedVoiceKey?: string,
-  expectedVoiceDir?: string
+  expectedVoiceDir?: string,
+  snapshotIndex?: Record<string, string[]>
 ): Promise<boolean> {
   if (signal.aborted) return false;
   
   // Use snapshot voice context if provided, otherwise current
   const voiceKey = expectedVoiceKey || currentVoiceKey;
   const voiceDir = expectedVoiceDir || currentVoiceDir;
+  // Use snapshot index if provided — this is the index that was captured
+  // when processEntries started, so it stays consistent even if voice switches
+  const targetIndex = snapshotIndex || diskIndex;
   
   try {
     // Determine which engine to use based on the snapshot voice key
     const engine = voiceKey.startsWith('google') ? 'google' : voiceKey.startsWith('elevenlabs') ? 'elevenlabs' : null;
     if (!engine) return false;
+    
+    // Check variant count BEFORE generating (avoid wasted API calls)
+    const key = cacheKey(text, style);
+    if ((targetIndex[key]?.length || 0) >= MAX_VARIANTS) return false;
     
     let audioBase64: string | null = null;
 
@@ -645,25 +725,29 @@ async function generateAndSaveClip(
 
     if (!audioBase64 || signal.aborted) return false;
 
-    // Verify voice hasn't changed before saving — prevents cross-contamination
-    if (expectedVoiceKey && currentVoiceKey !== expectedVoiceKey) {
-      console.log(`🚫 DISCARDED (voice changed): "${text}"`);
-      return false;
+    // Voice changed check — still save the clip to the SNAPSHOT directory
+    // (it was generated with the right voice), but skip playback cache update
+    const voiceStillActive = currentVoiceKey === voiceKey;
+    if (!voiceStillActive) {
+      console.log(`⚠️ Voice changed during generation of "${text}" — saving to ${voiceKey} dir only`);
     }
 
-    // Save to filesystem
+    // Save to filesystem (always to the snapshot voice's directory)
     const filename = randomFilename();
     const filePath = `${voiceDir}${filename}`;
     await FileSystem.writeAsStringAsync(filePath, audioBase64, { encoding: FileSystem.EncodingType.Base64 });
 
-    // Update disk index
-    const key = cacheKey(text, style);
-    if (!diskIndex[key]) diskIndex[key] = [];
-    diskIndex[key].push(filename);
-    scheduleSaveIndex();
+    // Update the SNAPSHOT disk index (not the module-level one which may belong to another voice)
+    if (!targetIndex[key]) targetIndex[key] = [];
+    targetIndex[key].push(filename);
+    
+    // Only schedule index flush if snapshot IS the current index
+    if (targetIndex === diskIndex) {
+      scheduleSaveIndex();
+    }
 
     // Only update playback cache if this voice is still active
-    if (currentVoiceKey === voiceKey) {
+    if (voiceStillActive) {
       const dataUri = `data:audio/mpeg;base64,${audioBase64}`;
       const existing = playbackCache.get(text) || [];
       existing.push(dataUri);
@@ -671,7 +755,7 @@ async function generateAndSaveClip(
     }
 
     const tag = variantNum === 1 ? '💾' : '💾²';
-    console.log(`${tag} SAVED (v${variantNum}): "${text}"`);
+    console.log(`${tag} SAVED (v${variantNum}): "${text}"${voiceStillActive ? '' : ' [snapshot dir]'}`);
     
     if (variantNum === 1) {
       useCacheStore.setState(s => ({ completed: s.completed + 1 }));

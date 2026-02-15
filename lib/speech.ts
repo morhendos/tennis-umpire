@@ -6,7 +6,7 @@ import { useVoiceStore } from './voiceStore';
 import { t, LanguageCode, TranslationKey } from './translations';
 import { startBreakMusic, fadeOutAndStop, stopBreakMusic } from './breakMusic';
 import { useBreakTimerStore } from './breakTimerStore';
-import { getCachedAudio, saveLiveClip } from './voiceCache';
+import { getCachedAudio, saveLiveClip, getCurrentVoiceKey } from './voiceCache';
 
 // API URLs
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
@@ -431,6 +431,11 @@ async function speakInternal(text: string, style: AnnouncementStyle, gen: number
   console.log(`🎤 SPEAK: "${text}"`);
   console.log(`🎤 Engine: ${voiceEngine} | Style: ${style} | Gen: ${gen}`);
   
+  // Snapshot voice key BEFORE any async work — this is the voice that will
+  // generate the clip, and must be passed to saveLiveClip so it saves to the
+  // correct directory even if voice changes during the API call
+  const voiceKeySnapshot = getCurrentVoiceKey();
+  
   // Check pre-cache first (works for Google and ElevenLabs)
   if (voiceEngine !== 'native') {
     const cachedUri = getCachedAudio(text);
@@ -454,7 +459,7 @@ async function speakInternal(text: string, style: AnnouncementStyle, gen: number
     if (googleApiKey) {
       try {
         const ssml = wrapInSSML(text, style);
-        await speakWithGoogle(ssml, googleSettings, googleApiKey, true, gen, text, style);
+        await speakWithGoogle(ssml, googleSettings, googleApiKey, true, gen, text, style, voiceKeySnapshot);
         console.log(`✅ Google TTS success (live generation)`);
         console.log(`🎤 ────────────────────────────────────────\n`);
         return;
@@ -474,7 +479,7 @@ async function speakInternal(text: string, style: AnnouncementStyle, gen: number
   if (voiceEngine === 'elevenlabs') {
     if (elevenLabsApiKey) {
       try {
-        await speakWithElevenLabs(text, settings, elevenLabsApiKey, gen, style);
+        await speakWithElevenLabs(text, settings, elevenLabsApiKey, gen, style, voiceKeySnapshot);
         console.log(`✅ ElevenLabs success (live generation)`);
         console.log(`🎤 ────────────────────────────────────────\n`);
         return;
@@ -495,7 +500,7 @@ async function speakInternal(text: string, style: AnnouncementStyle, gen: number
 }
 
 // Google Cloud TTS - now supports SSML
-async function speakWithGoogle(text: string, settings: any, apiKey: string, isSSML: boolean = false, gen?: number, originalText?: string, style?: AnnouncementStyle): Promise<void> {
+async function speakWithGoogle(text: string, settings: any, apiKey: string, isSSML: boolean = false, gen?: number, originalText?: string, style?: AnnouncementStyle, voiceKeySnapshot?: string): Promise<void> {
   console.log('🔄 Calling Google Cloud TTS...');
   if (isSSML) {
     console.log('📝 Using SSML:', text);
@@ -563,8 +568,10 @@ async function speakWithGoogle(text: string, settings: any, apiKey: string, isSS
   const uri = `data:audio/mp3;base64,${data.audioContent}`;
 
   // Save live-generated clip to disk cache for future reuse
+  // Pass voiceKeySnapshot so it saves to the voice that GENERATED the clip,
+  // not whatever voice might be active now
   if (originalText && style) {
-    saveLiveClip(originalText, style, data.audioContent).catch(() => {});
+    saveLiveClip(originalText, style, data.audioContent, voiceKeySnapshot).catch(() => {});
   }
 
   const { sound } = await Audio.Sound.createAsync(
@@ -630,7 +637,7 @@ function prepareTextForElevenLabs(text: string): string {
 }
 
 // ElevenLabs TTS
-async function speakWithElevenLabs(text: string, settings: any, apiKey: string, gen?: number, style: AnnouncementStyle = 'score'): Promise<void> {
+async function speakWithElevenLabs(text: string, settings: any, apiKey: string, gen?: number, style: AnnouncementStyle = 'score', voiceKeySnapshot?: string): Promise<void> {
   console.log('🔄 Calling ElevenLabs API...');
   
   await stopCurrentAudio();
@@ -687,7 +694,8 @@ async function speakWithElevenLabs(text: string, settings: any, apiKey: string, 
   const uri = `data:audio/mpeg;base64,${base64}`;
 
   // Save live-generated clip to disk cache for future reuse
-  saveLiveClip(text, style, base64).catch(() => {});
+  // Pass voiceKeySnapshot so it saves to the voice that GENERATED the clip
+  saveLiveClip(text, style, base64, voiceKeySnapshot).catch(() => {});
 
   const { sound } = await Audio.Sound.createAsync(
     { uri },

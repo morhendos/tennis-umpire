@@ -7,6 +7,7 @@ import { t, LanguageCode, TranslationKey } from './translations';
 import { startBreakMusic, fadeOutAndStop, stopBreakMusic } from './breakMusic';
 import { useBreakTimerStore } from './breakTimerStore';
 import { getCachedAudio, saveLiveClip, getCurrentVoiceKey } from './voiceCache';
+import { initTickSound } from './tickSound';
 
 // API URLs
 const ELEVENLABS_API_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
@@ -130,6 +131,9 @@ async function initAudio() {
       shouldDuckAndroid: true,
     });
     console.log('✅ Audio initialized');
+    
+    // Pre-load tick sound for instant button feedback
+    await initTickSound();
     
     cachedVoices = await Speech.getAvailableVoicesAsync();
     console.log(`📢 Found ${cachedVoices.length} total voices`);

@@ -23,6 +23,7 @@ import {
 } from './speech';
 import { useVoiceStore } from './voiceStore';
 import { generateCache, clearCache, progressCache } from './voiceCache';
+import { playTick } from './tickSound';
 
 const MAX_HISTORY = 50;
 
@@ -70,6 +71,9 @@ export function useMatch(): UseMatchReturn {
   const scorePoint = useCallback(
     (player: Player) => {
       if (!match || match.isComplete) return;
+
+      // Instant audio feedback — confirms button press was registered
+      playTick();
 
       // Cancel any pending serve announcement (player scored before timer)
       cancelServeTimer();
@@ -173,6 +177,7 @@ export function useMatch(): UseMatchReturn {
   const undo = useCallback(() => {
     if (history.length === 0) return;
 
+    playTick(); // Instant feedback
     cancelServeTimer(); // Cancel any pending announcements
     const previousState = history[history.length - 1];
     setHistory((prev) => prev.slice(0, -1));
